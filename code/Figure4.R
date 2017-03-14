@@ -92,31 +92,31 @@ df.ssig <- df[df$padj < 0.01 & df$FDR < 0.01, ]
 
 
 
-f2A <- ggplot(df[complete.cases(df) & df$padj < 0.01, ], aes(logFC_bin, log2FoldChange)) +
+f4A <- ggplot(df[complete.cases(df) & df$padj < 0.01, ], aes(logFC_bin, log2FoldChange)) +
     geom_violin(aes(logFC_bin, log2FoldChange), fill = "dodgerblue", trim = TRUE, scale = "width") + 
     geom_hline(yintercept = 0) +  theme_bw() +  theme_Publication() +
     labs(title = "Differential expression stratified by E-P Loops", x = "log FC Loops", 
     y = "log FC Gene Expression")
 
-f2B <- qplot(df$distal_enhancer, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by enhancer H3K27ac", 
+f4B <- qplot(df$distal_enhancer, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by enhancer H3K27ac", 
     x = "log FC H3K27ac at enhancer anchor", y = "log FC of Transcript Expression") + geom_point(aes(colour = df$Differential_Loop)) + theme_Publication() +
      scale_colour_manual(name="",  values =c("dimgrey", "red"))+ theme(legend.position="none") + geom_smooth(method = "lm", se = FALSE, color = "black")
 
-f2C <- qplot(df$proximal_enhancer, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by promoter H3K27ac", 
+f4C <- qplot(df$proximal_enhancer, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by promoter H3K27ac", 
     x = "log FC H3K27ac at promoter anchor", y = "log FC of Transcript Expression") + geom_point(aes(colour = df$Differential_Loop)) + theme_Publication() +
     scale_colour_manual(name="",  values =c("dimgray", "red"))+ theme(legend.position="none") + geom_smooth(method = "lm", se = FALSE, color = "black")
 
-f2D <- qplot(df$distal_methyl, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by enhancer DNA Methylation", 
+f4D <- qplot(df$distal_methyl, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by enhancer DNA Methylation", 
     x = "Change in DNA methylation at enhancer anchor", y = "log FC of Transcript Expression") + geom_point(aes(colour = df$Differential_Loop)) +
     theme_Publication() + scale_colour_manual(name="",  values =c("dimgray", "red"))+ theme(legend.position="none") + geom_smooth(method = "lm", se = FALSE, color = "black")
 
-f2E <- qplot(df$proximal_methyl, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by promoter DNA Methylation", 
+f4E <- qplot(df$proximal_methyl, df$log2FoldChange) + theme_bw() + labs(title = "Differential Expression by promoter DNA Methylation", 
     x = "Change in DNA methylation at promoter anchor", y = "log FC of Transcript Expression") + geom_point(aes(colour = df$Differential_Loop)) +
     theme_Publication() + scale_colour_manual(name="",  values =c("dimgray", "red")) + theme(legend.position="none")+ geom_smooth(method = "lm", se = FALSE, color = "black")
 
 
-png("../figures/Figure2.png", width = 4800, height = 7200, res = 300)
-plot_grid(f2A, plot_grid(f2B, f2C, f2D, f2E, ncol = 2, labels = c('B','C','D','E'), label_size = 20),
+png("../figures/Figure4.png", width = 4800, height = 7200, res = 300)
+plot_grid(f4A, plot_grid(f4B, f4C, f4D, f4E, ncol = 2, labels = c('B','C','D','E'), label_size = 20),
           ncol = 1, rel_heights = c(0.5, 1), label_size = 20, labels = c('A', NULL))
 dev.off()
 
