@@ -7,7 +7,7 @@ Online resources and supplement
 [Caleb Lareau](mailto:caleblareau@g.harvard.edu) and [Martin Aryee](https://aryee.mgh.harvard.edu/)
 
 ### Links
-- [Code repository](https://github.com/aryeelab/diffloop_paper)
+- [Code repository](https://github.com/aryeelab/diffloop-paper)
 - [Detailed HTML Vignette](vignette/diffloop_vignette.html)
 
 ### About
