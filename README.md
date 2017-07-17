@@ -1,22 +1,35 @@
-# diffloop paper repository
+<br><br>
+# diffloop: a computational framework for identifying and analyzing differential DNA loops from sequencing data
 
-## About
+**Aryee Lab**
 
-This repository contains the code needed to generate all figures and tables in the manuscript shown above. Figure 1 was created using the R/Shiny interface [DNAlandscapeR](https://dnalandscaper.aryeelab.org). 
-Note: the numbering of the tables and figures has changed between versions; the code will generate all the appropriate figures, but they may be differentially labeled relative to the version of the manuscript. 
+Online resources and supplement
 
-## Important information
+### Authors
+[Caleb Lareau](mailto:caleblareau@g.harvard.edu) and [Martin Aryee](https://aryee.mgh.harvard.edu/)
 
-* Install [git large file storage](https://git-lfs.github.com/) before cloning repository to access full data
-* Link to ChIA-PET Pre-processing software: [mango](https://github.com/dphansti/mango)
-* A recent version of [diffloop](https://github.com/aryeelab/diffloop) is required to run the code in this repository. We'd recommend installing from our lab github branch for the most recent version and features `devtools::install_github("aryeelab/diffloop")`
-* One should just be able to run the scripts in "Code" to reproduce the analyses in the text and get a snense of how diffloop works.
-* A reasonable recent vignette showcasing additional functionality and analysis is present [here](https://rpubs.com/caleblareau/diffloop_vignette).
+### Links
+[Code repository](https://github.com/aryeelab/diffloop_paper) [Detailed HTML Vignette](vignette/diffloop_vignette.html)
 
-## Authors
+### About
+This repository contains more detailed use cases and analyses associated with the `diffloop` workflow.
+Figure 1 was created using the R/Shiny interface [DNAlandscapeR](https://dnalandscaper.aryeelab.org). 
 
-* [Caleb Lareau](https://caleblareau.github.io)
-* [Martin Aryee](https://aryee.mgh.harvard.edu/)
+### Important information
+- Install [git large file storage](https://git-lfs.github.com/) before cloning repository to access full data (~ 2 GB total).
+- Link to ChIA-PET Pre-processing software: [mango](https://github.com/dphansti/mango)
+- A recent version of [diffloop](https://bioconductor.org/packages/release/bioc/html/diffloop.html)
+is required to run the code in this repository.
+We'd recommend installing from Bioconductor to ensure a recent, stable version--
+```
+source("https://bioconductor.org/biocLite.R")
+biocLite("diffloop")
+```
+
+- An older vignette showcasing some additional functionality and analysis not highlighted in this 
+repository can be found [here](https://rpubs.com/caleblareau/diffloop_vignette).
+
+<br><br>
 
 
 
