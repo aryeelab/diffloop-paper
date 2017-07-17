@@ -1,19 +1,18 @@
 <br><br>
 # diffloop: a computational framework for identifying and analyzing differential DNA loops from sequencing data
 
-**Aryee Lab**
-
 Online resources and supplement
 
 ### Authors
 [Caleb Lareau](mailto:caleblareau@g.harvard.edu) and [Martin Aryee](https://aryee.mgh.harvard.edu/)
 
 ### Links
-[Code repository](https://github.com/aryeelab/diffloop_paper) [Detailed HTML Vignette](vignette/diffloop_vignette.html)
+- [Code repository](https://github.com/aryeelab/diffloop_paper)
+- [Detailed HTML Vignette](vignette/diffloop_vignette.html)
 
 ### About
 This repository contains more detailed use cases and analyses associated with the `diffloop` workflow.
-Figure 1 was created using the R/Shiny interface [DNAlandscapeR](https://dnalandscaper.aryeelab.org). 
+Figure 1E was created using the R/Shiny interface [DNAlandscapeR](https://dnalandscaper.aryeelab.org). 
 
 ### Important information
 - Install [git large file storage](https://git-lfs.github.com/) before cloning repository to access full data (~ 2 GB total).
