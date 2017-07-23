@@ -11,23 +11,17 @@ vignette: >
 ---
 ***
 
-# R markdown
+# Overview
 This is the syntax that we've been using in the labs thus far. It is much easier to provide plain text narration, but it is a bit more challenging to analyze 
+
+# Some notes on preprocessing
+Though outside the scope of `diffloop`, an important component to consider before using this package is the choice of preprocessing associated with 
+
+## Packages
+First, we'll load all the necessary packages for this detailed vignette overview
 
 ```{r packages, cache=FALSE, message=FALSE, warning = FALSE}
 library(diffloop)
 library(tidyverse)
 library(plotly)
-```
-
-However, note that the chunk options are the same--
-
-```{r init, cache=TRUE, message=FALSE, warning = FALSE, fig.align='center', fig.cap = "Figure 1; an example of plotly"}
-df <- data.frame(x = rnorm(100), y = 0)
-df <- df %>% mutate(z = x^2)
-p <- ggplot(df, aes(x=x, y=y, colour=z)) + geom_point() + 
-  scale_color_gradientn(colors = c("dodgerblue", "firebrick", "black")) +
-  theme_bw()
-
-ggplotly(p)
 ```
