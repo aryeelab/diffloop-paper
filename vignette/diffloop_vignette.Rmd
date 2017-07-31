@@ -25,3 +25,52 @@ library(diffloop)
 library(tidyverse)
 library(plotly)
 ```
+
+## Preprocessing
+
+The raw `.fatstq` read files for the POL2 data were preprocessed with the [mango] (https://github.com/dphansti/mango) package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.
+
+```
+head -3 *.interactions.all.mango
+```
+yields-- 
+```
+chr1    32705184    32708527    chr1    32712484    32715408    4   1
+chr1    32705184    32708527    chr1    32755920    32759477    3   1
+chr1    32705184    32708527    chr1    32799616    32803060    6   1
+```
+
+Another possible format for reads are `.bedpe` files, which are very similar to the output files produced by mango. To use the loopsMake function from a different preprocessing step, have files X.loop_counts.bedpe,Y.loop_counts.bedpe, Z.loop_counts.bedpe in bed_dir for samples = (X,Y,Z) where the first lines should resemble:
+
+```
+head -3 *.loop_counts.bedpe
+```
+yields--
+```
+1 10002272 10004045 10 120968807 120969483 . 1
+1 10002272 10004045 10 99551498 99552470 . 1
+1 10002272 10004045 1 10002272 10004045 . 17
+```
+
+where the first three columns specify the position (chr:start:stop) of the first anchor, the second three columns specify the position (chr:start:stop) of the secnd anchor, the 7th column is “.” and the 8th column is the number of paired-end reads support that particular PET.
+
+For this vignette, we use the `.mango` output files. 
+
+## Session info
+
+```{r sessInfo}
+sessionInfo()
+```
+
+## Citations
+
+$^1$Hnisz, Denes, et al. "Activation of proto-oncogenes by disruption of
+chromosome neighborhoods." Science (2016). <br><br>
+$^2$Ji, Xiong, et al. "3D Chromosome Regulatory Landscape of Human Pluripotent
+Cells." Cell stem cell (2015).<br><br>
+$^3$Phanstiel, D, et al. "Mango: A bias correcting ChIA-PET analysis pipeline."
+Bioinformatics (2015). <br><br>
+$^4$Robinson, M, et al. "edgeR: a Bioconductor package for differential expression
+analysis of digital gene expression data." Bioinformatics (2010). <br><br>
+$^5$Law, C, et al. "Voom: precision weights unlock linear model analysis tools
+for RNA-seq read counts." Genome Biology (2014). 

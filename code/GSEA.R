@@ -56,8 +56,7 @@ head(k)
 head(stat)
 system.time(gsa <- runGSA(stat, geneSetStat="wilcoxon", signifMethod="nullDist", gsc=gsc, gsSizeLim=c(5,300)))
 gsa <- GSAsummaryTable(gsa)
-o <- order(gsa[,"p (dist.dir.up)"])
-gsa <- gsa[o,]
+gsa <- gsa[order(gsa[,"p (dist.dir.up)"]),]
 k_gsa <- gsa[gsa[,"p adj (dist.dir.up)"] < 0.1, ]
 k_gsa[, c(1,5)]
 write.table(k_gsa[, c(1,5)], file = "../tables/Table_k562.txt", sep = "\t", quote = FALSE, row.names = FALSE)
