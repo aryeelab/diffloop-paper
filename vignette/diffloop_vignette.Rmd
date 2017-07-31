@@ -12,7 +12,9 @@ vignette: >
 ***
 
 # Overview
+The purpose of this document is to describe in greater detail much of the useful functionality implemented in `diffloop`, an `R/Bioconductor` package 
 
+Additional steps regarding the quality control ana analysis of similar ENCODE ChIA-PET data can be found [here](https://rpubs.com/caleblareau/diffloop_vignette). 
 
 # Some notes on preprocessing
 Though outside the scope of `diffloop`, an important component to consider before using this package is the choice of preprocessing associated with 
@@ -49,15 +51,45 @@ For this vignette, we use the `.mango` output files.
 
 
 ## Packages
-First, we'll load all the necessary packages for this detailed vignette overview
+First, we'll load all the necessary packages for this vignette overview--
 
 ```{r packages, cache=FALSE, message=FALSE, warning = FALSE}
 library(diffloop)
-library(tidyverse)
+library(GenomicRanges)
 library(plotly)
 ```
 
+QC steps--
+
+```{r importQC, cache = FALSE, message=FALSE, warning = FALSE}
+full <- loopsMake.mango("../data/raw_mango")
+dim(full)
+full <- updateLDGroups(full, c("K562", "K562", "MCF7", "MCF7"))
+samples <- c("HCT116", "K562_r1", "K562_r2", "MCF7_r1", "MCF_r2")
+long <- subsetLoops(full, full@rowData$loopWidth >= 5000) # remove and loops that merged together from import
+dim(long)
+# Remove regions of CNV
+k562.cnv <- makeGRangesFromDataFrame(
+  setNames(read.table("../data/cnv/K562-CNV.bedLogR")[,1:4],
+                                              c("chr", "start", "end", "type")), keep.extra.columns = TRUE)
+mcf7.cnv <- makeGRangesFromDataFrame(setNames(read.table("../data/cnv/MCF7-CNV.bedLogR")[,1:4],
+                                              c("chr", "start", "end", "type")), keep.extra.columns = TRUE)
+
+cnv.regions <- union(mcf7.cnv[mcols(mcf7.cnv)$type != "normal"],
+                     k562.cnv[mcols(k562.cnv)$type != "normal"])
+noCNV <- removeRegion(long, rmchr(cnv.regions))
+dim(noCNV)
+
+# Filter Mango interactions
+mangoSig <- mangoCorrection(noCNV)
+dim(mangoSig)
+
+# save RDS
+qcLoops <- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)
+```
+
 ## Integration with transcriptome data
+
 
 ```{r deseq, warning = FALSE, message = FALSE}
 library(DESeq2)
