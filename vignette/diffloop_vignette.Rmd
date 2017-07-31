@@ -12,21 +12,12 @@ vignette: >
 ***
 
 # Overview
-This is the syntax that we've been using in the labs thus far. It is much easier to provide plain text narration, but it is a bit more challenging to analyze 
+
 
 # Some notes on preprocessing
 Though outside the scope of `diffloop`, an important component to consider before using this package is the choice of preprocessing associated with 
 
-## Packages
-First, we'll load all the necessary packages for this detailed vignette overview
-
-```{r packages, cache=FALSE, message=FALSE, warning = FALSE}
-library(diffloop)
-library(tidyverse)
-library(plotly)
-```
-
-## Preprocessing
+## Preprocessed data
 
 The raw `.fatstq` read files for the POL2 data were preprocessed with the [mango] (https://github.com/dphansti/mango) package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.
 
@@ -55,6 +46,40 @@ yields--
 where the first three columns specify the position (chr:start:stop) of the first anchor, the second three columns specify the position (chr:start:stop) of the secnd anchor, the 7th column is “.” and the 8th column is the number of paired-end reads support that particular PET.
 
 For this vignette, we use the `.mango` output files. 
+
+
+## Packages
+First, we'll load all the necessary packages for this detailed vignette overview
+
+```{r packages, cache=FALSE, message=FALSE, warning = FALSE}
+library(diffloop)
+library(tidyverse)
+library(plotly)
+```
+
+## Integration with transcriptome data
+
+```{r deseq, warning = FALSE, message = FALSE}
+library(DESeq2)
+
+files <- grep("counts", list.files("../data/rna-seq/"), value = TRUE)
+condition <- c("k562", "k562", "k562", "mcf7", "mcf7", "mcf7")
+names <- c("k1", "k2", "k3", "m1", "m2", "m3")
+sampleTable <- data.frame(sampleName = names, fileName = files, condition = condition)
+dds <- DESeqDataSetFromHTSeqCount(sampleTable = sampleTable, directory = "../data/rna-seq/", design = ~condition)
+
+dds <- dds[rowSums(counts(dds)) > 1, ]  #remove zero counts
+dds$condition <- factor(dds$condition, levels = c("k562", "mcf7"))
+dds <- DESeq(dds)
+res <- results(dds)
+res <- res[complete.cases(res), ]
+resDESeq2 <- res[order(res$pvalue), ]
+```
+
+# Summary
+
+This vignette was written to demonstrate a more detailed workflow for identifying and analyzing variabile DNA loops with `diffloop`. Moreover, as handling DNA looping data is still rather new, some of the nuances associated with preprocessing discussed above should be carefullly considered. Thought the quality control measures for a set of loops require some thought, a wide variety of options are available in `diffloop` for these to be filterd before differential testing. Ultimately, the integration of extensive epigenetic and transcriptional data to identify and annotate regions of differential loops are the core functionality of the package. The visualizations provide both large-scale trends (e.g. correlations between logFC of loops and the transcription FC) and anecdotal regions of variable topology, as shown in the plots in this vignette. As the availability of DNA looping data continues to grow and experiments are designed to test unique aspects of variable DNA interactions, we expect to add more features to diffloop to further facilitate detailed analyses
+
 
 ## Session info
 
