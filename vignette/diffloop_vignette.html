@@ -161,6 +161,9 @@ chr1    32705184    32708527    chr1    32799616    32803060    6   1</code></pr
 <p>where the first three columns specify the position (chr:start:stop) of the first anchor, the second three columns specify the position (chr:start:stop) of the secnd anchor, the 7th column is “.” and the 8th column is the number of paired-end reads support that particular PET.</p>
 <p>For this vignette, we use the <code>.mango</code> output files.</p>
 </div>
+<div id="difference-between-mango-and-diffloop" class="section level2">
+<h2>Difference between mango and diffloop</h2>
+</div>
 <div id="packages" class="section level2">
 <h2>Packages</h2>
 <p>First, we’ll load all the necessary packages for this vignette overview–</p>
@@ -175,7 +178,10 @@ library(ggplot2)</code></pre>
 <div id="import-quality-control" class="section level2">
 <h2>Import / quality control</h2>
 <p>There are two main functions currently available in <code>diffloop</code> used to import loops. Examples of each are discussed <a href="https://rpubs.com/caleblareau/diffloop_vignette">here</a>, but for this vignette, we only use the <code>loopsMake.mango</code> function, which imports files that end in <code>.mango</code>.</p>
-<p>The nature of the cell lines that we are analyzing in this experimental setting implies that</p>
+<p>The nature of the cell lines that we are analyzing in this experimental setting necessitates that regions of the genome likely to be affected by cancer genome rearrangements and copy number alterations could bias differential looping results. To this end, we use the <code>removeRegion()</code> function can be called to filter loops that have one or more anchors in a particular region that may be blacklisted. While CNVs likely have some interesting effect on topology that should be explored in the future, we simply remove these regions to avoid a confounded signal where we mis-attribute an apparent difference in topology to a difference better explained by altered CNV.</p>
+<p>After removing these regions with CNV alteration, we then will filter loops that are deemed biased from the mango Step 5 function. The diffloop implementation aggregates counts across all samples when apply the mango correction model. Here, we filter all loops with an FDR &gt; 0.01 as implemented in the original mango software.</p>
+<p>Finally, we filter loops using the <code>filterLoops()</code> function to ensure that loops have at least 2 PETs in at least 2 samples; this filtering step is akin to filtering out lowly expressed genes in RNA-Seq. Failing to do some level of filtering like this heavily influences the pooled variance estimations from <code>edgeR</code> and related tools.</p>
+<p>The code chunk below shows the basic workflow for importing data and performing the quality control metrics discussed above, including the <code>dim()</code> of the loops objects at each filerting step so that one can readily see how loops and anchors get filtered out during this process–</p>
 <pre class="r"><code>full &lt;- loopsMake.mango(&quot;../data/raw_mango&quot;)
 dim(full)</code></pre>
 <pre><code>##   anchors interactions samples colData rowData
@@ -206,6 +212,9 @@ dim(mangoSig)</code></pre>
 ## 1   15407        57744       4       2       3</code></pre>
 <pre class="r"><code>qcLoops &lt;- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)</code></pre>
 </div>
+<div id="differential-loop-calling" class="section level2">
+<h2>Differential loop calling</h2>
+</div>
 <div id="modified-fdr-calculations" class="section level2">
 <h2>Modified FDR Calculations</h2>
 <p>Though the following section hasn’t been fully examined, note that the differential loop calling may be biased depending on whether the loops are long/short or perhaps a function of another covariate. To this end, we recommend using the <a href="http://bioconductor.org/packages/release/bioc/html/IHW.html">IHW package</a> for computing modified false-discovery rates. Given a <code>loops()</code> object named <code>assoc</code> with a similar 2x2 design, one can run <code>IHW</code> and incorporate the results into the <code>loops</code> object using a workflow like so–</p>
@@ -229,8 +238,12 @@ assoc@rowData$IHWadjP &lt;- ihwRes@df$adj_pvalue
 diffLoops &lt;- subsetLoops(assoc, assoc@rowData$IHWadjP &lt; 0.1)</code></pre>
 <p><strong>Note:</strong> this code is not executed in the analysis. Here, we condition of the variance of the loops using <code>DESeq2</code> and suggest that the differential loops called should be independent of the variance. Again, this is just one example for how one can compute modified false discovery rate statistics conditioned on some feature of the loops. This has been only gingerly tested internal to our lab, but other options worth considering may also include the loop width, which would be replaced in the <code>ihw</code> function call above.</p>
 </div>
+<div id="integration-with-other-epigenomic-data" class="section level2">
+<h2>Integration with other epigenomic data</h2>
+</div>
 <div id="integration-with-transcriptome-data" class="section level2">
 <h2>Integration with transcriptome data</h2>
+<p>A core component of understanding the putative function of differential loops is the effect on transcription. Depending on the analysis that is desired, this can be quite tricky to integrate two very different data sets. However, we’ve provided some basic functionality for linking differential gene expression results from <code>DESeq2</code> to enhancer-promoter loops, detailed below. First, consider a rather straightforward analysis framework for performing differential gene expression analyses using <code>DESeq2</code>–</p>
 <pre class="r"><code>library(DESeq2)
 
 files &lt;- grep(&quot;counts&quot;, list.files(&quot;../data/rna-seq/&quot;), value = TRUE)
@@ -245,6 +258,22 @@ dds &lt;- DESeq(dds)
 res &lt;- results(dds)
 res &lt;- res[complete.cases(res), ]
 resDESeq2 &lt;- res[order(res$pvalue), ]</code></pre>
+<p>With the <code>DESeq2</code> data in a table, we can annotate enhancer-promoter loops with their corresponding gene expression values. To achieve this, sequential execution of the <code>keepEPloops()</code> and <code>annotateLoops.dge()</code> functions are required. This will add data in the rowData slot that has the transcriptional information associated with the particular loop when <code>multiple = FALSE</code>, as we show below.</p>
+<pre><code>km_res.ep &lt;- keepEPloops(km_anno, enhancer, promoter)
+km.linked &lt;- annotateLoops.dge(km_res.ep, resDESeq2, multiple = FALSE)</code></pre>
+<p>If <code>multiple = TRUE</code>, then loops that bridge multiple promoters will be annotated with transcription values. To achieve this, the returning functional value cannot be a loops object since we have to duplicate the loop to accommodate the multiple promoters.</p>
+<p>In this code chunk, we also set up a data frame for plotting global trends, including the methylation values at distal regions and promoter regions.</p>
+<pre><code>df &lt;- summary(km.linked)
+df$logFC_bin &lt;- cut(df$logFC, seq(-12, 12, 3))
+df$log2FoldChange_bin &lt;- cut(df$log2FoldChange, seq(-20, 20, 5))</code></pre>
+<p>We use our large data frame to visualize the relationship between increasing strength of enhancer-promoter loops and the increasing relative expression of transcripts that are linked to the loops.</p>
+<pre><code>loopViolin &lt;- ggplot(df[complete.cases(df) &amp; df$padj &lt; 0.1, ], aes(logFC_bin, log2FoldChange)) + 
+    geom_violin(aes(logFC_bin, log2FoldChange), fill = &quot;dodgerblue&quot;, trim = TRUE, scale = &quot;width&quot;) + 
+    geom_hline(yintercept = 0) +  theme_bw() + 
+    labs(title = &quot;Differential expression stratified by E-P Loops&quot;, x = &quot;log FC Loops&quot;, 
+    y = &quot;log FC Gene Expression&quot;)
+loopViolin</code></pre>
+<p>The plot clearly shows a trend where increasing the logFC of the loops results in a corresponding logFC increase in the corresponding transcript that is the target of the enhancer-promoter loop. While there may be some degree of non-linearity in this plot, we suggest that analyzing more closely-related phenotypes may yield better insights into the role of differential loops on specific gene xpression programs.</p>
 </div>
 </div>
 <div id="summary" class="section level1">

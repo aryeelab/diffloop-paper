@@ -69,6 +69,9 @@ where the first three columns specify the position (chr:start:stop) of the first
 
 For this vignette, we use the `.mango` output files. 
 
+## Difference between mango and diffloop
+
+
 
 ## Packages
 
@@ -88,8 +91,13 @@ We've created a novel `S4` `loops()` object that provides the backbone for housi
 
 There are two main functions currently available in `diffloop` used to import loops. Examples of each are discussed [here](https://rpubs.com/caleblareau/diffloop_vignette), but for this vignette, we only use the `loopsMake.mango` function, which imports files that end in `.mango`. 
 
-The nature of the cell lines that we are analyzing in this experimental setting implies that 
+The nature of the cell lines that we are analyzing in this experimental setting necessitates that regions of the genome likely to be affected by cancer genome rearrangements and copy number alterations could bias differential looping results. To this end, we use the `removeRegion()` function can be called to filter loops that have one or more anchors in a particular region that may be blacklisted. While CNVs likely have some interesting effect on topology that should be explored in the future, we simply remove these regions to avoid a confounded signal where we mis-attribute an apparent difference in topology to a difference better explained by altered CNV.
 
+After removing these regions with CNV alteration, we then will filter loops that are deemed biased from the mango Step 5 function. The diffloop implementation aggregates counts across all samples when apply the mango correction model. Here, we filter all loops with an FDR > 0.01 as implemented in the original mango software.
+
+Finally, we filter loops using the `filterLoops()` function to ensure that loops have at least 2 PETs in at least 2 samples; this filtering step is akin to filtering out lowly expressed genes in RNA-Seq. Failing to do some level of filtering like this heavily influences the pooled variance estimations from `edgeR` and related tools.
+
+The code chunk below shows the basic workflow for importing data and performing the quality control metrics discussed above, including the `dim()` of the loops objects at each filerting step so that one can readily see how loops and anchors get filtered out during this process--
 
 ```{r importQC, cache = FALSE, message=FALSE, warning = FALSE}
 full <- loopsMake.mango("../data/raw_mango")
@@ -116,6 +124,8 @@ dim(mangoSig)
 
 qcLoops <- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)
 ```
+
+## Differential loop calling
 
 ## Modified FDR Calculations
 
@@ -144,7 +154,11 @@ diffLoops <- subsetLoops(assoc, assoc@rowData$IHWadjP < 0.1)
 
 **Note:** this code is not executed in the analysis. Here, we condition of the variance of the loops using `DESeq2` and suggest that the differential loops called should be independent of the variance. Again, this is just one example for how one can compute modified false discovery rate statistics conditioned on some feature of the loops. This has been only gingerly tested internal to our lab, but other options worth considering may also include the loop width, which would be replaced in the `ihw` function call above. 
 
+## Integration with other epigenomic data
+
 ## Integration with transcriptome data
+
+A core component of understanding the putative function of differential loops is the effect on transcription. Depending on the analysis that is desired, this can be quite tricky to integrate two very different data sets. However, we've provided some basic functionality for linking differential gene expression results from `DESeq2` to enhancer-promoter loops, detailed below. First, consider a rather straightforward analysis framework for performing differential gene expression analyses using `DESeq2`--
 
 ```{r deseq, warning = FALSE, message = FALSE}
 library(DESeq2)
@@ -162,6 +176,36 @@ res <- results(dds)
 res <- res[complete.cases(res), ]
 resDESeq2 <- res[order(res$pvalue), ]
 ```
+
+With the `DESeq2` data in a table, we can annotate enhancer-promoter loops with their corresponding gene expression values. To achieve this, sequential execution of the `keepEPloops()` and `annotateLoops.dge()` functions are required. This will add data in the rowData slot that has the transcriptional information associated with the particular loop when `multiple = FALSE`, as we show below.
+
+```
+km_res.ep <- keepEPloops(km_anno, enhancer, promoter)
+km.linked <- annotateLoops.dge(km_res.ep, resDESeq2, multiple = FALSE)
+```
+
+If `multiple = TRUE`, then loops that bridge multiple promoters will be annotated with transcription values. To achieve this, the returning functional value cannot be a loops object since we have to duplicate the loop to accommodate the multiple promoters.
+
+In this code chunk, we also set up a data frame for plotting global trends, including the methylation values at distal regions and promoter regions.
+
+```
+df <- summary(km.linked)
+df$logFC_bin <- cut(df$logFC, seq(-12, 12, 3))
+df$log2FoldChange_bin <- cut(df$log2FoldChange, seq(-20, 20, 5))
+```
+
+We use our large data frame to visualize the relationship between increasing strength of enhancer-promoter loops and the increasing relative expression of transcripts that are linked to the loops.
+
+```
+loopViolin <- ggplot(df[complete.cases(df) & df$padj < 0.1, ], aes(logFC_bin, log2FoldChange)) + 
+    geom_violin(aes(logFC_bin, log2FoldChange), fill = "dodgerblue", trim = TRUE, scale = "width") + 
+    geom_hline(yintercept = 0) +  theme_bw() + 
+    labs(title = "Differential expression stratified by E-P Loops", x = "log FC Loops", 
+    y = "log FC Gene Expression")
+loopViolin
+```
+The plot clearly shows a trend where increasing the logFC of the loops results in a corresponding logFC increase in the corresponding transcript that is the target of the enhancer-promoter loop. While there may be some degree of non-linearity in this plot, we suggest that analyzing more closely-related phenotypes may yield better insights into the role of differential loops on specific gene xpression programs. 
+
 
 # Summary
 
