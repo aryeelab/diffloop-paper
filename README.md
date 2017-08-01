@@ -1,5 +1,5 @@
 <br><br>
-# diffloop: a computational framework for identifying and analyzing differential DNA loops from sequencing data
+## diffloop: a computational framework for identifying and analyzing differential DNA loops from sequencing data
 
 Online resources and supplemental information
 
@@ -7,7 +7,7 @@ Online resources and supplemental information
 [Caleb Lareau](mailto:caleblareau@g.harvard.edu) and [Martin Aryee](https://aryee.mgh.harvard.edu/)
 
 ### Links
-- [Code repository](https://github.com/aryeelab/diffloop-paper)
+- [Code repository](https://github.com/aryeelab/diffloop-paper) hosted on GitHub. 
 - [Detailed HTML Vignette](vignette/diffloop_vignette.html), which contains a reproducible walk-through the core functionality of `diffloop`. Cloning and analyzing the data in the repository linked above enables users to similarly follow the analysis structure of the vignette. 
 - [Writeup comparing variable](vignette/models_sizeFactors/writeup.pdf) contains a `.pdf` writeup
 of assessing differential looping associations under different model specifications. In particular,
