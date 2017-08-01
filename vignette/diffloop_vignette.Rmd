@@ -12,16 +12,33 @@ vignette: >
 ***
 
 # Overview
-The purpose of this document is to describe in greater detail much of the useful functionality implemented in `diffloop`, an `R/Bioconductor` package 
+The purpose of this document is to describe in greater detail much of the useful functionality implemented in `diffloop`, an `R/Bioconductor` package. As the name suggests, the goal of this package was to create a computational framework to identify differential loops between conditions akin to differential gene expression analyses from RNA-Seq and related transcriptomics data. However, much of the more useful methodology is incorporated *before* one runs differential association (_i.e._ quality control) and after differential loops are called (_e.g._ visualization, correlating differential loops with epigenomic signal and gene expression, etc.). This extended online resource provides a means for understanding these function
 
 Additional steps regarding the quality control ana analysis of similar ENCODE ChIA-PET data can be found [here](https://rpubs.com/caleblareau/diffloop_vignette). 
 
-# Some notes on preprocessing
-Though outside the scope of `diffloop`, an important component to consider before using this package is the choice of preprocessing associated with 
+## On preprocessing
 
-## Preprocessed data
+Though outside the scope of `diffloop`, an important component to consider before using this package is the choice of preprocessing associated with the loop data. For this vignette, we used the [mango](https://github.com/dphansti/mango) ChIA-PET pre-processing pipeline importantly specifying the `reportAllPairs = TRUE` flag such that any PET binding two peaks would be retained. However, it may be optimal to process the interaction set together, which requires pre-specifying anchor loci. To this end, we recommend an in-house tool, [hichipper](https://aryeelab.org/hichipper), which enables this and other HiChIP-specific methods.
 
-The raw `.fatstq` read files for the POL2 data were preprocessed with the [mango] (https://github.com/dphansti/mango) package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.
+Regardless of the choice of preprocessing, some basic assumptions about the anchor size have to be made. In most Hi-C pre-processing pipelines, a fixed genome window of 5kb, 20kb, or similar distance is employed. From what we've seen using preprocessing tools, most support some fixed-width padding around a `.narrowPeak` file that is called from `macs2` or a similar peak-caller when an immunoprecipitation is used (in HiChIP and ChIA-PET). Tools such as `mango` and `hichipper` use 500-1,000 bp as anchor pads, though users should consider the question of interest before selecting window padding, etc., for their experimental system. While `diffloop` has functionality to enable anchor padding, in general, this is best employed early in the pre-processing steps using the flags made available in these and other tools. 
+
+## On single-replicate samples 
+
+Akin to `DESeq`, `edgeR`, and related RNA analysis frameworks, replicate samples are essentially *required* to accurately identify differential loops with statistical confidence. However, one can certainly utilize `diffloop` to identify putative differential loops in single replicate settings. For example, suppose you had a `loops()` object called `dat` with 2 samples that that you wanted to compare against each other. While the assumptions needed for variance estimation in the loop counts make computing a p-value or FDR per-loop impossible as we will demonstrate later with replicates, we'd advice the following workflow for find differential loops in single-replicate settings.
+
+```{r singles, eval=FALSE, message=FALSE, warning = FALSE}
+dat <- loopsMake("../loopsdata")
+dat@rowData$diffCount <- dat@counts[,2] - dat@counts[,1] # per loop differences between sample 1 and 2
+df <- summary(dat)
+```
+
+**Note:** above are real diffloop commands but are not executable in the lense of the vignette. 
+
+In the code above, the idea is to add a column to the `rowData` slot that is the difference in counts per loop between sample 2 and sample 2, which may be informative for finding differential loops between the two samples. the `summary` command in `diffloop` (when applied to a `loops()` object) results in a `data.frame` of useful information per loop where users can now sort `df` by the `diffCount` column much like any other `data.frame` in R. Again, while single replicate conditions are certainly sub-optimal, we suggest this framework for a simple first pass in this setting. 
+
+## Sample analysis of ENCODE ChIA-PET data
+
+The raw `.fastq` read files for the POL2 data were preprocessed with the [mango](https://github.com/dphansti/mango) package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.
 
 ```
 head -3 *.interactions.all.mango

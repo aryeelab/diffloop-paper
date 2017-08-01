@@ -127,15 +127,25 @@ $(document).ready(function () {
 <hr />
 <div id="overview" class="section level1">
 <h1>Overview</h1>
-<p>The purpose of this document is to describe in greater detail much of the useful functionality implemented in <code>diffloop</code>, an <code>R/Bioconductor</code> package</p>
+<p>The purpose of this document is to describe in greater detail much of the useful functionality implemented in <code>diffloop</code>, an <code>R/Bioconductor</code> package. As the name suggests, the goal of this package was to create a computational framework to identify differential loops between conditions akin to differential gene expression analyses from RNA-Seq and related transcriptomics data. However, much of the more useful methodology is incorporated <em>before</em> one runs differential association (<em>i.e.</em> quality control) and after differential loops are called (<em>e.g.</em> visualization, correlating differential loops with epigenomic signal and gene expression, etc.). This extended online resource provides a means for understanding these function</p>
 <p>Additional steps regarding the quality control ana analysis of similar ENCODE ChIA-PET data can be found <a href="https://rpubs.com/caleblareau/diffloop_vignette">here</a>.</p>
+<div id="on-preprocessing" class="section level2">
+<h2>On preprocessing</h2>
+<p>Though outside the scope of <code>diffloop</code>, an important component to consider before using this package is the choice of preprocessing associated with the loop data. For this vignette, we used the <a href="https://github.com/dphansti/mango">mango</a> ChIA-PET pre-processing pipeline importantly specifying the <code>reportAllPairs = TRUE</code> flag such that any PET binding two peaks would be retained. However, it may be optimal to process the interaction set together, which requires pre-specifying anchor loci. To this end, we recommend an in-house tool, <a href="https://aryeelab.org/hichipper">hichipper</a>, which enables this and other HiChIP-specific methods.</p>
+<p>Regardless of the choice of preprocessing, some basic assumptions about the anchor size have to be made. In most Hi-C pre-processing pipelines, a fixed genome window of 5kb, 20kb, or similar distance is employed. From what we’ve seen using preprocessing tools, most support some fixed-width padding around a <code>.narrowPeak</code> file that is called from <code>macs2</code> or a similar peak-caller when an immunoprecipitation is used (in HiChIP and ChIA-PET). Tools such as <code>mango</code> and <code>hichipper</code> use 500-1,000 bp as anchor pads, though users should consider the question of interest before selecting window padding, etc., for their experimental system. While <code>diffloop</code> has functionality to enable anchor padding, in general, this is best employed early in the pre-processing steps using the flags made available in these and other tools.</p>
 </div>
-<div id="some-notes-on-preprocessing" class="section level1">
-<h1>Some notes on preprocessing</h1>
-<p>Though outside the scope of <code>diffloop</code>, an important component to consider before using this package is the choice of preprocessing associated with</p>
-<div id="preprocessed-data" class="section level2">
-<h2>Preprocessed data</h2>
-<p>The raw <code>.fatstq</code> read files for the POL2 data were preprocessed with the [mango] (<a href="https://github.com/dphansti/mango" class="uri">https://github.com/dphansti/mango</a>) package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.</p>
+<div id="on-single-replicate-samples" class="section level2">
+<h2>On single-replicate samples</h2>
+<p>Akin to <code>DESeq</code>, <code>edgeR</code>, and related RNA analysis frameworks, replicate samples are essentially <em>required</em> to accurately identify differential loops with statistical confidence. However, one can certainly utilize <code>diffloop</code> to identify putative differential loops in single replicate settings. For example, suppose you had a <code>loops()</code> object called <code>dat</code> with 2 samples that that you wanted to compare against each other. While the assumptions needed for variance estimation in the loop counts make computing a p-value or FDR per-loop impossible as we will demonstrate later with replicates, we’d advice the following workflow for find differential loops in single-replicate settings.</p>
+<pre class="r"><code>dat &lt;- loopsMake(&quot;../loopsdata&quot;)
+dat@rowData$diffCount &lt;- dat@counts[,2] - dat@counts[,1] # per loop differences between sample 1 and 2
+df &lt;- summary(dat)</code></pre>
+<p><strong>Note:</strong> above are real diffloop commands but are not executable in the lense of the vignette.</p>
+<p>In the code above, the idea is to add a column to the <code>rowData</code> slot that is the difference in counts per loop between sample 2 and sample 2, which may be informative for finding differential loops between the two samples. the <code>summary</code> command in <code>diffloop</code> (when applied to a <code>loops()</code> object) results in a <code>data.frame</code> of useful information per loop where users can now sort <code>df</code> by the <code>diffCount</code> column much like any other <code>data.frame</code> in R. Again, while single replicate conditions are certainly sub-optimal, we suggest this framework for a simple first pass in this setting.</p>
+</div>
+<div id="sample-analysis-of-encode-chia-pet-data" class="section level2">
+<h2>Sample analysis of ENCODE ChIA-PET data</h2>
+<p>The raw <code>.fastq</code> read files for the POL2 data were preprocessed with the <a href="https://github.com/dphansti/mango">mango</a> package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.</p>
 <pre><code>head -3 *.interactions.all.mango</code></pre>
 <p>yields–</p>
 <pre><code>chr1    32705184    32708527    chr1    32712484    32715408    4   1
