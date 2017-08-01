@@ -1,0 +1,258 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{ amssymb }
+\usepackage{ textcomp }
+\usepackage{ dsfont }
+\usepackage{mathtools}
+\usepackage{caption}
+
+\topmargin=-0.5in
+\evensidemargin=0in
+\oddsidemargin=0in
+\textwidth=6.5in
+\textheight=9.0in
+\headsep=0.25in
+
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+
+\title{diffloop: analysis of variable loops under different models}
+\author{Caleb Lareau and Martin Aryee}
+\date{\today}
+
+\begin{document}
+\maketitle
+\captionsetup[figure]{labelformat=empty}
+
+\section*{Overview}
+The purpose of this document is to provide a high-level comparison of different models fit to the K562 and MCF7 ChIA-PET data from ENCODE. Specifically, we examine the association statistics from using voom, edgeR, and binned associations. 
+
+\section*{Mean-Variance Plot}
+The mean-variance plot of the ChIA-PET data analyzed in this manuscript is shown in \textbf{Figure S1}. RNA-Seq count data is often modeled as negative binomial, since the variance exceeds the mean resulting in an overdispersion relative to the Poisson model. We hypothesized that a similar model could be applied to counts data in the diffloop framework. 
+
+\begin{figure}[h]
+<<mvPlot, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 5, fig.width = 5, fig.align='center', cache = TRUE>>=
+library(DESeq2)
+library(edgeR)
+library(diffloop)
+setwd("/Volumes/dat/Research/AryeeResearch/topology_projects/diffloop-paper/vignette")
+full <- loopsMake.mango("../data/raw_mango")
+group = c("k562", "k562", "mcf7", "mcf7")
+full <- updateLDGroups(full, c("K562", "K562", "MCF7", "MCF7"))
+samples <- c("HCT116", "K562_r1", "K562_r2", "MCF7_r1", "MCF_r2")
+long <- subsetLoops(full, full@rowData$loopWidth >= 5000) # remove and loops that merged together from import
+# Remove regions of CNV
+k562.cnv <- makeGRangesFromDataFrame(
+  setNames(read.table("../data/cnv/K562-CNV.bedLogR")[,1:4],
+                                              c("chr", "start", "end", "type")), keep.extra.columns = TRUE)
+mcf7.cnv <- makeGRangesFromDataFrame(setNames(read.table("../data/cnv/MCF7-CNV.bedLogR")[,1:4],
+                                              c("chr", "start", "end", "type")), keep.extra.columns = TRUE)
+
+cnv.regions <- union(mcf7.cnv[mcols(mcf7.cnv)$type != "normal"],
+                     k562.cnv[mcols(k562.cnv)$type != "normal"])
+noCNV <- removeRegion(long, rmchr(cnv.regions))
+
+# Filter Mango interactions
+mangoSig <- mangoCorrection(noCNV)
+
+qcLoops <- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)
+d <- DGEList(qcLoops@counts, group = group)
+d <- estimateCommonDisp(d)
+plotMeanVar(d, show.raw.vars = TRUE, show.ave.raw.vars = FALSE, NBline = TRUE,
+            xlab = "Mean loop counts level (log10 scale)", ylab = "Pooled loop-level variance (log10 scale)")
+legend("topleft", legend = c("Poisson", "Negative Binomial"), fill = c("black", "dodgerblue"), border = c("black", "dodgerblue"), bty = "n")
+@
+\centering
+\caption{\textbf{Figure S1.} Mean-variance plot of 2x2 differential association between MCF7 and K562.}
+\end{figure} \newpage
+
+While the Negative Binomial line does not obviously deviate from the Poisson line for the loop counts data considered here, we note a similar pattern in RNA-Seq data for low counts in the displayed range while the variance deviates more clearly from the mean at larger count values. We expect that similar behaviour will be observed at higher ChIA-PET counts and therefore implemented the negative binomial as the default model in diffloop. 
+
+
+\section*{Loop Width Stratification}
+Though the size factor correction as implemented in diffloop adjusts for variable read depth between samples (Figure 2), we considered whether or not the size factor should vary with the loop width spanning the two anchors. For example, the plot below of differential associations calculated within loop width strata shows a potential weak dependence on loop width (\textbf{Figure S2}). 
+
+\begin{figure}[h]
+<<linePlot, echo = FALSE, fig.height = 4, message = FALSE, warning = FALSE,fig.align='center', cache = TRUE>>=
+library(diffloop)
+library(ggplot2)
+library(reshape2)
+library(knitr)
+library(printr)
+options(scipen=0)
+km_full <- qcLoops
+
+processWidthSF <- function(km_full, dist1, dist2){
+    s <- subsetLoops(km_full, log10(km_full@rowData$loopWidth) >= dist1 & log10(km_full@rowData$loopWidth) < dist2)
+    cbind(dim(s)[2], calcLDSizeFactors(s)@colData$sizeFactor)
+}
+vals <- seq(3.9,5.7,.3)
+out <- t(sapply(vals, function(v) { data.matrix(cbind(max = v, processWidthSF(km_full, v-.3, v)))}))
+sdf<- data.frame(out[,c(1,9,10,11,12)])
+names(sdf) <- c("Max", "k562_r1", "k562_r2", "mcf7_r1", "mcf7_r2")
+mdf <- melt(sdf, id = "Max")
+mdf$value <- as.numeric(mdf$value)
+mdf$Max <- as.factor(as.numeric(mdf$Max))
+names(mdf) <- c("Max", "Replicate", "value")
+ggplot(mdf, aes(x = Max, y = value, group = Replicate, color = Replicate)) + 
+  geom_line() + geom_point() +
+    theme_bw() + labs(title = "Summary of size factors across variable loop widths", 
+    x = "log10 loop width", y = "Size Factor",  fill = NULL) 
+@
+\centering
+\caption{\textbf{Figure S2.} Variable size factor across different loop widths (distance spanned between the midpoint of the anchors).}
+\end{figure}
+
+To assess the effect of variable loop widths, we binned loops based on their distance spanned using the groups above (increments of 0.3 on the $\log_{10}$ scale) and assessed differential looping within each stratum individually. \textbf{Figure S3} shows a per-loop comparison of the $-\log_{10}$ ratio of the q-values using the standard model compared to the stratified model. Loops annotated in red and blue are shown with summary statistics in \textbf{Table S1} and \textbf{Table S2}.
+
+\begin{figure}[h]
+<<other, echo = FALSE, fig.height = 4, fig.width = 5, message = FALSE, warning = FALSE, eval = TRUE, cache = TRUE, fig.align = 'center'>>=
+km_full <- qcLoops
+chunkAssoc <- function(km_full, dist1, dist2){
+    s <- subsetLoops(km_full, log10(km_full@rowData$loopWidth) >= dist1 & log10(km_full@rowData$loopWidth) < dist2)
+    data.frame(summary(quickAssoc(s))[, c(17,19)]) # pull out region and pvalue
+}
+vals <- seq(3.9,6.0,.3)
+chunkassocres <- lapply(vals, function(v) { chunkAssoc(km_full, v-.3, v)})
+ 
+dfchunk <- setNames(do.call("rbind", chunkassocres), c("pval_chunk", "region"))
+normAssoc <- data.frame(summary(quickAssoc(km_full)))
+mdf <- merge(dfchunk, normAssoc, by.x = "region", by.y = "region")
+mdf$FDR_chunk <- p.adjust(mdf$pval_chunk, method = "BH")
+Outlier <- as.numeric(-log10(mdf$FDR/mdf$FDR_chunk) > 20)
+Outlier <- as.numeric(-log10(mdf$FDR/mdf$FDR_chunk) < -20) + Outlier*2
+Outlier <- as.factor(Outlier)
+# some that are way off the graph aren't show
+qplot(mdf$loopWidth, -log10(mdf$FDR/mdf$FDR_chunk)) +
+    geom_point( aes(colour = Outlier))+ theme(legend.position="none")+
+    scale_color_manual("Status", values = c("black", "firebrick", "dodgerblue")) +
+    labs(title = "Association binned by Distance", 
+    x = "Loop Width", y = "-log10(fixed/variable FDR)") +
+    theme_bw() + 
+    theme(legend.position = "none") 
+@
+\centering
+\caption{\textbf{Figure S3.} Comparison of per-loop statistical significance with using the standard unstratified model vs. a stratified model based on loop width. Loops marked in red are more significant ($> 20$ orders of magnitude) when using the unstratified model between the tests whereas the blue loops are more significant ($>20$ orders of magnitude) when using the stratified model. The Y axis shows the $-\log_{10}$ ratio of the q-values. \newline}
+\end{figure} \newpage \newpage 
+
+\begin{figure}[h]
+<<tab1, echo = FALSE, warning = FALSE, cache = TRUE >>=
+tb1 <- signif(mdf[Outlier == 1, c(9,10,11,12,13,20,2)],3)
+rownames(tb1) <- NULL
+colnames(tb1) <- c("k562_r1","k562_r2","mcf7_r1","mcf7_r2","LoopWidth","Regular FDR", "Variable SF FDR")
+tb1 <- data.frame(lapply(tb1, as.character), stringsAsFactors=FALSE)
+knitr::kable(tb1)
+@
+\centering
+\caption{\textbf{Table S1.} Summary statistics of the loops marked in red in \textbf{Figure S3.} These loops were highlighted due to large differences in the summary statistic measures such that the unstratified model yielded a less significant test statistic. Individual replicate PET counts, the distance the loop spans, as well as the q-values for each test are displayed. \newline } 
+\end{figure}
+
+\begin{figure}[h]
+<<tab2, echo = FALSE, warning = FALSE, fig.align='center', cache = TRUE>>=
+tb2 <- signif(mdf[Outlier == 2, c(9,10,11,12,13,20,2)],3)
+rownames(tb2) <- NULL
+colnames(tb2) <- c("k562_r1","k562_r2","mcf7_r1","mcf7_r2","LoopWidth","Regular FDR", "Variable SF FDR")
+tb2 <- data.frame(lapply(tb2, as.character), stringsAsFactors=FALSE)
+knitr::kable(tb2)
+
+@
+\centering
+\caption{\textbf{Table S2.} Summary statistics of the loops marked in blue in \textbf{Figure S3.} These loops were highlighted due to large differences in the summary statistic measures such that the unstratified model yielded a more significant test statistic. Individual replicate PET counts, the distance the loop spans, as well as the q-values for each test are displayed.}
+\end{figure}  \clearpage
+
+We note that all the highlighted loops are deeemed highly statistically significant in both stratified and unstratified analyses. To explore whether the two models identify different sets of differential loops we plotted the $-\log_{10}$ q-values against each other after applying a ceiling of 4 (q = 0.0001) (\textbf{Figure S4}). Of note, few loops tended to deviate significantly in this range indicating that either approach produces a very similar set of differential loops. Thus, in the present implementation of diffloop, a single unstratified model is applied and the loop width is not considered. As more topology libraries become available, novel methods of association, including those that account for loop width, may be incorporated in the package as the evidence demands.  
+
+\begin{figure}[h]
+<<closeMDF, echo = FALSE, fig.height = 4, fig.width = 5, message = FALSE, warning = FALSE, eval = TRUE, cache = TRUE, fig.align = 'center'>>=
+cmdf <- -log10(mdf[,c(20,21)])
+cmdf[cmdf > 4] <- 4
+anno <- as.factor((cmdf$FDR < 2 & cmdf$FDR_chunk > 2) + (cmdf$FDR > 2 & cmdf$FDR_chunk < 2)*2 + (cmdf$FDR_chunk < 0.3162 & cmdf$FDR >= 4)*3)
+
+qplot(cmdf$FDR, cmdf$FDR_chunk) + theme(legend.position="none")+ geom_point( aes(colour = anno))+
+    scale_color_manual("Status", values = c("black", "firebrick", "dodgerblue", "dodgerblue")) +
+    labs(title = "Variable Size Factor Correction", 
+    x = "-log10(fixed FDR)", y = "-log10(variable FDR)") +
+    theme_bw() + 
+    theme(legend.position = "none") 
+@
+\centering
+\caption{\textbf{Figure S4.} A scatter plot comparing the $-\log_{10}$ FDR q-values between 0 and 4 of the fixed and binned association tests. For either test, $-\log_{10}$ FDR q-values greater than 4 were shrunk to 4 for visualization. Loops marked in red were differential (q-value $<0.01$) in the binned association test.} 
+\end{figure}  \clearpage
+
+
+\section*{Comparison with Voom}
+As an alternative model to Negative Binomial regression for RNA-Seq data, the limma-voom method approximates the mean-variance relationship of the log-counts and applies a moderated t-test. We implemented a similar approach for finding differential loops analogous to differential transcripts in this model. \textbf{Figure S5} shows a per-loop comparison of the Negative Binomial regression (edgeR) and the voom q-values as a function of loop width. We also highlight the largest deviants in \textbf{Table S3}. 
+
+\begin{figure}[h]
+<<evv, message = FALSE, warning = FALSE, echo = FALSE, fig.height = 4, fig.width = 5, fig.align='center', cache = TRUE >>=
+library(limma)
+km_full <- qcLoops
+group = c("k562", "k562", "mcf7", "mcf7")
+km_full <- updateLDGroups(km_full, group)
+km_res <- quickAssoc(km_full)
+km_res2 <- quickAssocVoom(km_res)
+fdrmat <- km_res2@rowData[,c(8,13,1)]
+mdf <- setNames(data.frame(fdrmat), c("edgeR", "Voom", "LoopWidth"))
+
+Outlier <- as.numeric(-log10(mdf$edgeR/mdf$Voom) > 30)
+Outlier <- as.factor(Outlier)
+qplot(mdf$LoopWidth, -log10(mdf$edgeR/mdf$Voom)) +
+    geom_point( aes(colour = Outlier))+ theme(legend.position="none")+
+    scale_color_manual("Status", values = c("black", "orange1")) +
+    labs(title = "edgeR versus Voom Association", 
+    x = "Loop Width", y = "-log10(edgeR/Voom)") +
+    theme_bw() + 
+    theme(legend.position = "none")
+@
+\centering
+\caption{\textbf{Figure S5.} Comparison of per-loop statistical significance using models from edgeR and Voom. Loops highlighted in orange were assigned a much more statistically significant q-value in edgeR ($> 30$ orders of magnitude) than voom. These loops are shown in \textbf{Table S3}.}
+\end{figure}
+
+\begin{figure}[h]
+<<tab3, echo = FALSE, warning = FALSE, fig.align='center', cache = TRUE>>=
+tb3 <- signif(summary(km_res2)[Outlier == 1, c(7,8,9,10,11,18,23)],3)
+rownames(tb3) <-NULL
+
+colnames(tb3) <- c("k562_r1","k562_r2","mcf7_r1","mcf7_r2","LoopWidth","edgeR FDR", "Voom FDR")
+tb3 <- data.frame(lapply(tb3, as.character), stringsAsFactors=FALSE)
+knitr::kable(tb3)
+@
+\centering
+\caption{\textbf{Table S3.} Summary statistics of the loops marked in orange in \textbf{Figure S5.} These loops were highlighted due to large differences ($> 30$ orders of magnitude) in the summary statistic measures between the edgeR and Voom association models.}
+\end{figure}  \clearpage 
+
+A trend emerges as shown in \textbf{Figure S5} where differential loops spanning smaller distances were more statistically significant in the edgeR association model. We note however that the loops with the largest deviation (orange, \textbf{Table S4}) are in fact highly significant in both models. To assess whether any loops might switch from 'significant' to 'not significant' we again plotted the $-\log_{10}$ q-values with a cap at 4 (\textbf{Figure S6}). Loops that are significant in one model but not the other are marked by color. Summary statistics for the orange loops, where edgeR indicates a highly significancant difference (FDR $< 0.01$) whereas voom suggests no/little difference (FDR $> 0.1$) are shown in \textbf{Table S4}. 
+
+\begin{figure}[h]
+<<closeMDFvoom, echo = FALSE, fig.height = 4, fig.width = 5, message = FALSE, warning = FALSE, eval = TRUE, cache = TRUE, fig.align = 'center'>>=
+cmdf <- -log10(mdf[,c(1,2)])
+cmdf[cmdf > 4] <- 4
+
+anno <- as.factor((cmdf$edgeR < 2 & cmdf$Voom > 2) + (cmdf$edgeR > 2 & cmdf$Voom < 2)*2 + (cmdf$edgeR >= 4 & cmdf$Voom < 1)*3)
+# some that are way off the graph aren't show
+qplot(cmdf$edgeR, cmdf$Voom) + theme(legend.position="none")+ geom_point(aes(colour = anno))+
+    scale_color_manual("Status", values = c("black", "green4", "orange4", "orange1")) +
+    labs(title = "edgeR versus Voom Association", 
+    x = "-log10(edgeR FDR)", y = "-log10(Voom FDR)") +
+    theme_bw() + 
+    theme(legend.position = "none") 
+@
+\centering
+\caption{\textbf{Figure S6.} Comparison of per-loop statistical significance using models from edgeR and voom. Loops highlighted in orange were indicated as the edgeR model provided more statistically significant FDR value. These loops are shown in \textbf{Table S4}.}
+\end{figure}
+
+
+\begin{figure}[h]
+<<tabY, echo = FALSE, warning = FALSE, fig.align='center', cache = TRUE>>=
+tby <- signif(summary(km_res2)[anno == 5, c(7,8,9,10,11,18,23)],3)
+rownames(tby) <-NULL
+colnames(tby) <- c("k562_r1","k562_r2","mcf7_r1","mcf7_r2","LoopWidth","edgeR FDR", "Voom FDR")
+tby <- data.frame(lapply(tby, as.character), stringsAsFactors=FALSE)
+knitr::kable(tby)
+@
+\centering
+\caption{\textbf{Table S4.} Summary statistics of the loops marked in orange in \textbf{Figure S6.} These loops were highlighted due to differences in the summary statistic measures such that they were differential (FDR $< 0.01$) in the edgeR model but not differential (FDR $> 0.1$) in the voom model.}
+\end{figure} \clearpage
+
+\end{document}
+

@@ -101,7 +101,6 @@ dim(noCNV)
 mangoSig <- mangoCorrection(noCNV)
 dim(mangoSig)
 
-# save RDS
 qcLoops <- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)
 ```
 
