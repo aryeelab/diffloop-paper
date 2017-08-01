@@ -156,6 +156,24 @@ diffLoops <- subsetLoops(assoc, assoc@rowData$IHWadjP < 0.1)
 
 ## Integration with other epigenomic data
 
+In this section, we walk through an overview of how to incorporate additional forms of epigenetic data in `diffloop`, which includ DNA Methylation, ChIP-Seq, and DNase hypersensitivity. In general, we use these data to 1) annotate and characterize loops and 2) relate epigenetic signal near anchors to other effects in three-dimensional proximity though distal in the linear genome. 
+
+### Annotating loops
+
+Critical functionality in downstream `diffloop` analyses requires the annotation of loops. In particular, we annotate loops based on their assumed transcriptional activity by annotating the loops object with regions of promoters and enhancers. Here, we import enhancers defined by H3K27ac peaks in either cancer sample and use the RefSeq hg19 annotation transcription start sites padded by 1kb as the promoter regions.
+
+```{r annotate, warning = FALSE, message = FALSE, eval = TRUE}
+kh3 <- "../data/annotation/K562_H3K27ac.bed"
+mh3 <- "../data/annotation/MCF7_H3K27ac.bed"
+
+h3k27ac.k <- rmchr(padGRanges(bedToGRanges(kh3), pad = 1000))
+h3k27ac.m <- rmchr(padGRanges(bedToGRanges(mh3), pad = 1000))
+
+enhancer <- union(h3k27ac.m, h3k27ac.k)
+promoter <- padGRanges(getHumanTSS(), pad = 1000)
+km_anno <- annotateLoops(qcLoops, enhancer = enhancer, promoter = promoter)
+```
+
 ## Integration with transcriptome data
 
 A core component of understanding the putative function of differential loops is the effect on transcription. Depending on the analysis that is desired, this can be quite tricky to integrate two very different data sets. However, we've provided some basic functionality for linking differential gene expression results from `DESeq2` to enhancer-promoter loops, detailed below. First, consider a rather straightforward analysis framework for performing differential gene expression analyses using `DESeq2`--
@@ -204,19 +222,39 @@ loopViolin <- ggplot(df[complete.cases(df) & df$padj < 0.1, ], aes(logFC_bin, lo
     y = "log FC Gene Expression")
 loopViolin
 ```
-The plot clearly shows a trend where increasing the logFC of the loops results in a corresponding logFC increase in the corresponding transcript that is the target of the enhancer-promoter loop. While there may be some degree of non-linearity in this plot, we suggest that analyzing more closely-related phenotypes may yield better insights into the role of differential loops on specific gene xpression programs. 
 
+The plot clearly shows a trend where increasing the logFC of the loops results in a corresponding logFC increase in the corresponding transcript that is the target of the enhancer-promoter loop. While there may be some degree of non-linearity in this plot, we suggest that analyzing more closely-related phenotypes may yield better insights into the role of differential loops on specific gene expression programs. 
+
+## Visualization
+We can visualize regions of differential topology using the loopPlot function. Below are two examples of significantly altered topology between the K562 and MCF7 samples.
+
+```{r p1, fig.height=7}
+chr1reg <- GRanges(seqnames=c("1"),ranges=IRanges(start=c(11840000),end=c(11980000)))
+p1 <- loopPlot(km_anno, chr1reg)
+```
+
+This plot highlights the MTHFR gene, which is significantly up-regulated in the K562 cancer cell line. We can see much stronger (line width is linearly proportional to the number of PETs supporting the interaction) E-P loops leading to the promoter of MTHFR as well as multiple enhancer-enhancer loops further localizing enhancer regions in three-dimensional proximity to the MTHFR promoter locus.
+
+We note the color scheme where red loops bridge enhancers and promoters, purple loops bridge two enhancers, orange loops bridge two promoters, blue loops bridge regions of CTCF occupancy, and black have no special color annotation based on the data present.
+
+```{r p2, fig.height=7}
+chr14reg <- GRanges(seqnames=c("14"),ranges=IRanges(start=c(35800000),end=c(35890000)))
+p14 <- loopPlot(km_anno, chr14reg)
+```
+
+The second plot highlights the NFKBIA gene, which is upregulated in breast cancers like MCF7. This loop plot shows several strong enhancer-promoter loops localizing downstream enhancers to the NFKBIA promoter. This change in topology helps explain the upregulation of this gene in MCF7 relative to K562.
 
 # Summary
 
-This vignette was written to demonstrate a more detailed workflow for identifying and analyzing variabile DNA loops with `diffloop`. Moreover, as handling DNA looping data is still rather new, some of the nuances associated with preprocessing discussed above should be carefullly considered. Thought the quality control measures for a set of loops require some thought, a wide variety of options are available in `diffloop` for these to be filterd before differential testing. Ultimately, the integration of extensive epigenetic and transcriptional data to identify and annotate regions of differential loops are the core functionality of the package. The visualizations provide both large-scale trends (e.g. correlations between logFC of loops and the transcription FC) and anecdotal regions of variable topology, as shown in the plots in this vignette. As the availability of DNA looping data continues to grow and experiments are designed to test unique aspects of variable DNA interactions, we expect to add more features to diffloop to further facilitate detailed analyses
-
+This vignette was written to demonstrate a more detailed workflow for identifying and analyzing variabile DNA loops with `diffloop`. Moreover, as handling DNA looping data is still rather new, some of the nuances associated with preprocessing discussed above should be carefullly considered. Thought the quality control measures for a set of loops require some thought, a wide variety of options are available in `diffloop` for these to be filterd before differential testing. Ultimately, the integration of extensive epigenetic and transcriptional data to identify and annotate regions of differential loops are the core functionality of the package. The visualizations provide both large-scale trends (e.g. correlations between logFC of loops and the transcription FC) and anecdotal regions of variable topology, as shown in the plots in this vignette. As the availability of DNA looping data continues to grow and experiments are designed to test unique aspects of variable DNA interactions, we expect to add more features to diffloop to further facilitate detailed analyses.
 
 ## Session info
 
 ```{r sessInfo}
 sessionInfo()
 ```
+
+
 
 ## Citations
 
