@@ -11,7 +11,7 @@
 
 <meta name="author" content="Caleb Lareau &amp; Martin Aryee" />
 
-<meta name="date" content="2017-07-31" />
+<meta name="date" content="2017-08-01" />
 
 <title>Analysis of variable DNA loops with diffloop</title>
 
@@ -119,7 +119,7 @@ $(document).ready(function () {
 
 <h1 class="title toc-ignore">Analysis of variable DNA loops with diffloop</h1>
 <h4 class="author"><em>Caleb Lareau &amp; Martin Aryee</em></h4>
-<h4 class="date"><em>2017-07-31</em></h4>
+<h4 class="date"><em>2017-08-01</em></h4>
 
 </div>
 
@@ -141,10 +141,11 @@ $(document).ready(function () {
 dat@rowData$diffCount &lt;- dat@counts[,2] - dat@counts[,1] # per loop differences between sample 1 and 2
 df &lt;- summary(dat)</code></pre>
 <p><strong>Note:</strong> above are real diffloop commands but are not executable in the lense of the vignette.</p>
-<p>In the code above, the idea is to add a column to the <code>rowData</code> slot that is the difference in counts per loop between sample 2 and sample 2, which may be informative for finding differential loops between the two samples. the <code>summary</code> command in <code>diffloop</code> (when applied to a <code>loops()</code> object) results in a <code>data.frame</code> of useful information per loop where users can now sort <code>df</code> by the <code>diffCount</code> column much like any other <code>data.frame</code> in R. Again, while single replicate conditions are certainly sub-optimal, we suggest this framework for a simple first pass in this setting.</p>
+<p>In the code above, the idea is to add a column to the <code>rowData</code> slot that is the difference in counts per loop between sample 2 and sample 1, which may be informative for finding differential loops between the two samples. the <code>summary</code> command in <code>diffloop</code> (when applied to a <code>loops()</code> object) results in a <code>data.frame</code> of useful information per loop where users can now sort <code>df</code> by the <code>diffCount</code> column much like any other <code>data.frame</code> in R. Again, while single replicate conditions are certainly sub-optimal, we suggest this framework for a simple first pass in this setting.</p>
 </div>
-<div id="sample-analysis-of-encode-chia-pet-data" class="section level2">
-<h2>Sample analysis of ENCODE ChIA-PET data</h2>
+<div id="sample-analysis-of-encode-chia-pet-data-preprocessing" class="section level2">
+<h2>Sample analysis of ENCODE ChIA-PET data / preprocessing</h2>
+<p>For the remaining contents of this document, we primarily discuss the analysis framework associated with a sample comparison of differential looping between the MCF7 and K562 cancer cell lines. ChIA-PET data made available through the ENCODE project were analyzed using the following workflow–</p>
 <p>The raw <code>.fastq</code> read files for the POL2 data were preprocessed with the <a href="https://github.com/dphansti/mango">mango</a> package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.</p>
 <pre><code>head -3 *.interactions.all.mango</code></pre>
 <p>yields–</p>
@@ -165,8 +166,16 @@ chr1    32705184    32708527    chr1    32799616    32803060    6   1</code></pr
 <p>First, we’ll load all the necessary packages for this vignette overview–</p>
 <pre class="r"><code>library(diffloop)
 library(GenomicRanges)
-library(plotly)</code></pre>
-<p>QC steps–</p>
+library(ggplot2)</code></pre>
+</div>
+<div id="data-structures" class="section level2">
+<h2>Data structures</h2>
+<p>We’ve created a novel <code>S4</code> <code>loops()</code> object that provides the backbone for housing data and is the input to virtually all functions shown here. Currently, <code>diffloop</code> functions only work on this type of object. <a href="mailto:caleblareau@g.harvard.edu">Email Caleb</a> if you have your loops data in another format that is reasonably common in <code>R/Bioconductor</code> workflows and converting it to a <code>loops()</code> object isn’t straightforward.</p>
+</div>
+<div id="import-quality-control" class="section level2">
+<h2>Import / quality control</h2>
+<p>There are two main functions currently available in <code>diffloop</code> used to import loops. Examples of each are discussed <a href="https://rpubs.com/caleblareau/diffloop_vignette">here</a>, but for this vignette, we only use the <code>loopsMake.mango</code> function, which imports files that end in <code>.mango</code>.</p>
+<p>The nature of the cell lines that we are analyzing in this experimental setting implies that</p>
 <pre class="r"><code>full &lt;- loopsMake.mango(&quot;../data/raw_mango&quot;)
 dim(full)</code></pre>
 <pre><code>##   anchors interactions samples colData rowData
@@ -195,8 +204,30 @@ mangoSig &lt;- mangoCorrection(noCNV)
 dim(mangoSig)</code></pre>
 <pre><code>##   anchors interactions samples colData rowData
 ## 1   15407        57744       4       2       3</code></pre>
-<pre class="r"><code># save RDS
-qcLoops &lt;- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)</code></pre>
+<pre class="r"><code>qcLoops &lt;- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)</code></pre>
+</div>
+<div id="modified-fdr-calculations" class="section level2">
+<h2>Modified FDR Calculations</h2>
+<p>Though the following section hasn’t been fully examined, note that the differential loop calling may be biased depending on whether the loops are long/short or perhaps a function of another covariate. To this end, we recommend using the <a href="http://bioconductor.org/packages/release/bioc/html/IHW.html">IHW package</a> for computing modified false-discovery rates. Given a <code>loops()</code> object named <code>assoc</code> with a similar 2x2 design, one can run <code>IHW</code> and incorporate the results into the <code>loops</code> object using a workflow like so–</p>
+<pre class="r"><code>library(IHW)
+library(DESeq2)
+
+# Do DESeq2 for IHW / FDR 
+dsdLoop &lt;- DESeqDataSetFromMatrix(
+  countData=assoc@counts,
+  colData=assoc@colData,
+  design=~ c(&quot;type1&quot;, &quot;type1&quot;, &quot;type2&quot;, &quot;type2&quot;) )
+dsdLoop &lt;- DESeq( dsdLoop )
+resLoop &lt;- as.data.frame( results( dsdLoop ) )
+resLoop$var &lt;- rowVars( counts(dsdLoop, normalized=TRUE) )
+
+resLoop$edgePval &lt;- assoc@rowData$PValue
+resLoop$varGroup &lt;- groups_by_filter(resLoop$var, 6)
+ihwRes &lt;- ihw( resLoop$edgePval ~ resLoop$var, alpha=0.1 )
+
+assoc@rowData$IHWadjP &lt;- ihwRes@df$adj_pvalue
+diffLoops &lt;- subsetLoops(assoc, assoc@rowData$IHWadjP &lt; 0.1)</code></pre>
+<p><strong>Note:</strong> this code is not executed in the analysis. Here, we condition of the variance of the loops using <code>DESeq2</code> and suggest that the differential loops called should be independent of the variance. Again, this is just one example for how one can compute modified false discovery rate statistics conditioned on some feature of the loops. This has been only gingerly tested internal to our lab, but other options worth considering may also include the loop width, which would be replaced in the <code>ihw</code> function call above.</p>
 </div>
 <div id="integration-with-transcriptome-data" class="section level2">
 <h2>Integration with transcriptome data</h2>
@@ -240,58 +271,55 @@ resDESeq2 &lt;- res[order(res$pvalue), ]</code></pre>
 ## other attached packages:
 ##  [1] DESeq2_1.16.1              SummarizedExperiment_1.6.3
 ##  [3] DelayedArray_0.2.7         matrixStats_0.52.2        
-##  [5] Biobase_2.36.2             plotly_4.7.0              
-##  [7] ggplot2_2.2.1              GenomicRanges_1.28.4      
-##  [9] GenomeInfoDb_1.12.2        IRanges_2.10.2            
-## [11] S4Vectors_0.14.3           BiocGenerics_0.22.0       
-## [13] diffloop_1.4.0            
+##  [5] Biobase_2.36.2             ggplot2_2.2.1             
+##  [7] GenomicRanges_1.28.4       GenomeInfoDb_1.12.2       
+##  [9] IRanges_2.10.2             S4Vectors_0.14.3          
+## [11] BiocGenerics_0.22.0        diffloop_1.4.0            
 ## 
 ## loaded via a namespace (and not attached):
 ##  [1] bitops_1.0-6             bit64_0.9-7             
-##  [3] RColorBrewer_1.1-2       httr_1.2.1              
-##  [5] rprojroot_1.2            tools_3.4.0             
-##  [7] backports_1.1.0          R6_2.2.2                
-##  [9] rpart_4.1-11             Hmisc_4.0-3             
-## [11] DBI_0.7                  lazyeval_0.2.0          
-## [13] colorspace_1.3-2         nnet_7.3-12             
-## [15] gridExtra_2.2.1          bit_1.1-12              
-## [17] compiler_3.4.0           htmlTable_1.9           
-## [19] rtracklayer_1.36.4       checkmate_1.8.3         
-## [21] scales_0.4.1             genefilter_1.58.1       
-## [23] readr_1.1.1              pbapply_1.3-3           
-## [25] stringr_1.2.0            digest_0.6.12           
-## [27] Rsamtools_1.28.0         foreign_0.8-69          
-## [29] rmarkdown_1.6            XVector_0.16.0          
-## [31] base64enc_0.1-3          pkgconfig_2.0.1         
-## [33] htmltools_0.3.6          limma_3.32.3            
-## [35] htmlwidgets_0.9          rlang_0.1.1             
-## [37] RSQLite_2.0              bindr_0.1               
-## [39] zoo_1.8-0                jsonlite_1.5            
-## [41] BiocParallel_1.10.1      acepack_1.4.1           
-## [43] dplyr_0.7.2              RCurl_1.95-4.8          
-## [45] magrittr_1.5             Sushi_1.14.0            
-## [47] GenomeInfoDbData_0.99.0  Formula_1.2-2           
-## [49] Matrix_1.2-10            Rcpp_0.12.12            
-## [51] munsell_0.4.3            stringi_1.1.5           
-## [53] yaml_2.1.14              edgeR_3.18.1            
-## [55] zlibbioc_1.22.0          plyr_1.8.4              
-## [57] grid_3.4.0               blob_1.1.0              
-## [59] lattice_0.20-35          Biostrings_2.44.2       
-## [61] splines_3.4.0            annotate_1.54.0         
-## [63] hms_0.3                  locfit_1.5-9.1          
-## [65] knitr_1.16               geneplotter_1.54.0      
-## [67] reshape2_1.4.2           codetools_0.2-15        
-## [69] biomaRt_2.32.1           XML_3.98-1.9            
-## [71] glue_1.1.1               evaluate_0.10.1         
-## [73] latticeExtra_0.6-28      data.table_1.10.4       
-## [75] foreach_1.4.3            gtable_0.2.0            
-## [77] purrr_0.2.2.2            tidyr_0.6.3             
-## [79] assertthat_0.2.0         xtable_1.8-2            
-## [81] survival_2.41-3          viridisLite_0.2.0       
-## [83] tibble_1.3.3             iterators_1.0.8         
-## [85] GenomicAlignments_1.12.1 AnnotationDbi_1.38.1    
-## [87] memoise_1.1.0            bindrcpp_0.2            
-## [89] cluster_2.0.6            statmod_1.4.30</code></pre>
+##  [3] RColorBrewer_1.1-2       rprojroot_1.2           
+##  [5] tools_3.4.0              backports_1.1.0         
+##  [7] R6_2.2.2                 rpart_4.1-11            
+##  [9] Hmisc_4.0-3              DBI_0.7                 
+## [11] lazyeval_0.2.0           colorspace_1.3-2        
+## [13] nnet_7.3-12              gridExtra_2.2.1         
+## [15] bit_1.1-12               compiler_3.4.0          
+## [17] htmlTable_1.9            rtracklayer_1.36.4      
+## [19] scales_0.4.1             checkmate_1.8.3         
+## [21] readr_1.1.1              genefilter_1.58.1       
+## [23] pbapply_1.3-3            stringr_1.2.0           
+## [25] digest_0.6.12            Rsamtools_1.28.0        
+## [27] foreign_0.8-69           rmarkdown_1.6           
+## [29] XVector_0.16.0           base64enc_0.1-3         
+## [31] pkgconfig_2.0.1          htmltools_0.3.6         
+## [33] limma_3.32.3             htmlwidgets_0.9         
+## [35] rlang_0.1.1              RSQLite_2.0             
+## [37] bindr_0.1                zoo_1.8-0               
+## [39] BiocParallel_1.10.1      acepack_1.4.1           
+## [41] dplyr_0.7.2              RCurl_1.95-4.8          
+## [43] magrittr_1.5             Sushi_1.14.0            
+## [45] GenomeInfoDbData_0.99.0  Formula_1.2-2           
+## [47] Matrix_1.2-10            Rcpp_0.12.12            
+## [49] munsell_0.4.3            stringi_1.1.5           
+## [51] yaml_2.1.14              edgeR_3.18.1            
+## [53] zlibbioc_1.22.0          plyr_1.8.4              
+## [55] grid_3.4.0               blob_1.1.0              
+## [57] lattice_0.20-35          Biostrings_2.44.2       
+## [59] splines_3.4.0            annotate_1.54.0         
+## [61] hms_0.3                  locfit_1.5-9.1          
+## [63] knitr_1.16               geneplotter_1.54.0      
+## [65] reshape2_1.4.2           codetools_0.2-15        
+## [67] biomaRt_2.32.1           XML_3.98-1.9            
+## [69] glue_1.1.1               evaluate_0.10.1         
+## [71] latticeExtra_0.6-28      data.table_1.10.4       
+## [73] foreach_1.4.3            gtable_0.2.0            
+## [75] assertthat_0.2.0         xtable_1.8-2            
+## [77] survival_2.41-3          tibble_1.3.3            
+## [79] iterators_1.0.8          GenomicAlignments_1.12.1
+## [81] AnnotationDbi_1.38.1     memoise_1.1.0           
+## [83] bindrcpp_0.2             cluster_2.0.6           
+## [85] statmod_1.4.30</code></pre>
 </div>
 <div id="citations" class="section level2">
 <h2>Citations</h2>

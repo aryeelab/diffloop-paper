@@ -16,6 +16,7 @@ The purpose of this document is to describe in greater detail much of the useful
 
 Additional steps regarding the quality control ana analysis of similar ENCODE ChIA-PET data can be found [here](https://rpubs.com/caleblareau/diffloop_vignette). 
 
+
 ## On preprocessing
 
 Though outside the scope of `diffloop`, an important component to consider before using this package is the choice of preprocessing associated with the loop data. For this vignette, we used the [mango](https://github.com/dphansti/mango) ChIA-PET pre-processing pipeline importantly specifying the `reportAllPairs = TRUE` flag such that any PET binding two peaks would be retained. However, it may be optimal to process the interaction set together, which requires pre-specifying anchor loci. To this end, we recommend an in-house tool, [hichipper](https://aryeelab.org/hichipper), which enables this and other HiChIP-specific methods.
@@ -34,9 +35,11 @@ df <- summary(dat)
 
 **Note:** above are real diffloop commands but are not executable in the lense of the vignette. 
 
-In the code above, the idea is to add a column to the `rowData` slot that is the difference in counts per loop between sample 2 and sample 2, which may be informative for finding differential loops between the two samples. the `summary` command in `diffloop` (when applied to a `loops()` object) results in a `data.frame` of useful information per loop where users can now sort `df` by the `diffCount` column much like any other `data.frame` in R. Again, while single replicate conditions are certainly sub-optimal, we suggest this framework for a simple first pass in this setting. 
+In the code above, the idea is to add a column to the `rowData` slot that is the difference in counts per loop between sample 2 and sample 1, which may be informative for finding differential loops between the two samples. the `summary` command in `diffloop` (when applied to a `loops()` object) results in a `data.frame` of useful information per loop where users can now sort `df` by the `diffCount` column much like any other `data.frame` in R. Again, while single replicate conditions are certainly sub-optimal, we suggest this framework for a simple first pass in this setting. 
 
-## Sample analysis of ENCODE ChIA-PET data
+## Sample analysis of ENCODE ChIA-PET data / preprocessing
+
+For the remaining contents of this document, we primarily discuss the analysis framework associated with a sample comparison of differential looping between the MCF7 and K562 cancer cell lines. ChIA-PET data made available through the ENCODE project were analyzed using the following workflow--
 
 The raw `.fastq` read files for the POL2 data were preprocessed with the [mango](https://github.com/dphansti/mango) package, an R package that relies on bowtie, bedtools, and MACS2 to align reads, call anchor peaks, and summarize PETs per sample in the ChIA-PET experiment.
 
@@ -68,15 +71,25 @@ For this vignette, we use the `.mango` output files.
 
 
 ## Packages
+
 First, we'll load all the necessary packages for this vignette overview--
 
 ```{r packages, cache=FALSE, message=FALSE, warning = FALSE}
 library(diffloop)
 library(GenomicRanges)
-library(plotly)
+library(ggplot2)
 ```
 
-QC steps--
+## Data structures
+
+We've created a novel `S4` `loops()` object that provides the backbone for housing data and is the input to virtually all functions shown here. Currently, `diffloop` functions only work on this type of object. [Email Caleb](mailto:caleblareau@g.harvard.edu) if you have your loops data in another format that is reasonably common in `R/Bioconductor` workflows and converting it to a `loops()` object isn't straightforward.
+
+## Import / quality control
+
+There are two main functions currently available in `diffloop` used to import loops. Examples of each are discussed [here](https://rpubs.com/caleblareau/diffloop_vignette), but for this vignette, we only use the `loopsMake.mango` function, which imports files that end in `.mango`. 
+
+The nature of the cell lines that we are analyzing in this experimental setting implies that 
+
 
 ```{r importQC, cache = FALSE, message=FALSE, warning = FALSE}
 full <- loopsMake.mango("../data/raw_mango")
@@ -104,8 +117,34 @@ dim(mangoSig)
 qcLoops <- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)
 ```
 
-## Integration with transcriptome data
+## Modified FDR Calculations
 
+Though the following section hasn't been fully examined, note that the differential loop calling may be biased depending on whether the loops are long/short or perhaps a function of another covariate. To this end, we recommend using the [IHW package](http://bioconductor.org/packages/release/bioc/html/IHW.html) for computing modified false-discovery rates. Given a `loops()` object named `assoc` with a similar 2x2 design, one can run `IHW` and incorporate the results into the `loops` object using a workflow like so--
+
+```{r ihw, warning = FALSE, message = FALSE, eval = FALSE}
+library(IHW)
+library(DESeq2)
+
+# Do DESeq2 for IHW / FDR 
+dsdLoop <- DESeqDataSetFromMatrix(
+  countData=assoc@counts,
+  colData=assoc@colData,
+  design=~ c("type1", "type1", "type2", "type2") )
+dsdLoop <- DESeq( dsdLoop )
+resLoop <- as.data.frame( results( dsdLoop ) )
+resLoop$var <- rowVars( counts(dsdLoop, normalized=TRUE) )
+
+resLoop$edgePval <- assoc@rowData$PValue
+resLoop$varGroup <- groups_by_filter(resLoop$var, 6)
+ihwRes <- ihw( resLoop$edgePval ~ resLoop$var, alpha=0.1 )
+
+assoc@rowData$IHWadjP <- ihwRes@df$adj_pvalue
+diffLoops <- subsetLoops(assoc, assoc@rowData$IHWadjP < 0.1)
+```
+
+**Note:** this code is not executed in the analysis. Here, we condition of the variance of the loops using `DESeq2` and suggest that the differential loops called should be independent of the variance. Again, this is just one example for how one can compute modified false discovery rate statistics conditioned on some feature of the loops. This has been only gingerly tested internal to our lab, but other options worth considering may also include the loop width, which would be replaced in the `ihw` function call above. 
+
+## Integration with transcriptome data
 
 ```{r deseq, warning = FALSE, message = FALSE}
 library(DESeq2)
