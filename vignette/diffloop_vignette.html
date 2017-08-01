@@ -164,6 +164,8 @@ chr1    32705184    32708527    chr1    32799616    32803060    6   1</code></pr
 </div>
 <div id="difference-between-mango-and-diffloop" class="section level2">
 <h2>Difference between mango and diffloop</h2>
+<p>Most software for chromatin confirmation capture data like <code>mango</code> and <code>juicer</code> are focused on identifying whether or not a loop is real in a single sample form sequencing data. “Real” here simply means that the observed contact frequency from sequencing depth is greater than one would expect by chance. “Chance” here typically means that given some distance between two points and the total depth at two points, a reasonable background can be considered for how many paired-end reads we’d expect by chance.</p>
+<p>In contrast, <code>diffloop</code> essentially assumes that one has settled on whether a loop is real or not (though <code>diffloop</code> does provide quality control measures to facilitate the interfence of this quality control) and provides functionality to understand what role these loops may play coordinating epigenetic and transcriptomic states and whether there is significant variance in the reads supporting loops in different conditions. To this end, these software packages meet very different needs. As the vignette unfolds, we hope to communicate the syngery between these tools.</p>
 </div>
 <div id="packages" class="section level2">
 <h2>Packages</h2>
@@ -218,6 +220,7 @@ dim(mangoSig)</code></pre>
 </div>
 <div id="differential-loop-calling" class="section level2">
 <h2>Differential loop calling</h2>
+<p>For computing differential loops, <code>diffloop</code> offers a few different functions for performing statistical testing. Most simply, if the <code>groups</code> associated with the samples are correctly specified, one can simply use the <code>quickAssoc</code> or <code>quickAssocVoom</code> function to run either a negative-binomial regression or a t-test with precious weights as these have previously been implemented in other tools. For greater specificity, the <code>loopsAssoc()</code> function provides more user interaction and specification for association. In a simple 2 x 2 test association, either of the <code>quickAssoc</code> functions should work well. For all differential testing in the remainder of the vignette, we use the <code>quickAssoc()</code> function as needed to compute differential loops. We’ve also performed a more detailed analysis of different modifications to the basic loop association contained in the .pdf on the previous page. However, as their are relatively few datasets with DNA loops, users are advised to carefully consider modifications to their system as these have not been extensively tested in a variety of settings.</p>
 </div>
 <div id="modified-fdr-calculations" class="section level2">
 <h2>Modified FDR Calculations</h2>
@@ -248,6 +251,7 @@ diffLoops &lt;- subsetLoops(assoc, assoc@rowData$IHWadjP &lt; 0.1)</code></pre>
 <div id="annotating-loops" class="section level3">
 <h3>Annotating loops</h3>
 <p>Critical functionality in downstream <code>diffloop</code> analyses requires the annotation of loops. In particular, we annotate loops based on their assumed transcriptional activity by annotating the loops object with regions of promoters and enhancers. Here, we import enhancers defined by H3K27ac peaks in either cancer sample and use the RefSeq hg19 annotation transcription start sites padded by 1kb as the promoter regions.</p>
+<p>At the bottom of this code chunk, a four panel figure showing loops plotted against variable epigenetic marks is rendered and the code below provides four slightly redudant lines of executables to produce this figure. For each, a simple linear regression is fit between the log2 fold change of DNA looping data and epigenetic data between the two conditions, which signifies the break in the analysis of that particular data type. Variations of the <code>annotateAnchors</code> function provides the ability to import these epigenetic markings and facilitates their analysis with the loops() object.</p>
 <pre class="r"><code>kh3 &lt;- &quot;../data/annotation/K562_H3K27ac.bed&quot;
 mh3 &lt;- &quot;../data/annotation/MCF7_H3K27ac.bed&quot;
 
@@ -256,7 +260,7 @@ h3k27ac.m &lt;- rmchr(padGRanges(bedToGRanges(mh3), pad = 1000))
 
 enhancer &lt;- union(h3k27ac.m, h3k27ac.k)
 promoter &lt;- padGRanges(getHumanTSS(), pad = 1000)
-km_anno &lt;- annotateLoops(qcLoops, enhancer = enhancer, promoter = promoter)</code></pre>
+km_anno &lt;- annotateLoops(quickAssoc(qcLoops), enhancer = enhancer, promoter = promoter)</code></pre>
 </div>
 <div id="epigenetic-correlates" class="section level3">
 <h3>Epigenetic correlates</h3>
@@ -342,6 +346,16 @@ diff.methyl.max &lt;- as.matrix((sapply(1:length(idx), function(i) {
 big.meth.summary$diff.methyl.max &lt;- as.numeric(diff.methyl.max)
 methyl.df &lt;- big.meth.summary[, c(&quot;logFC&quot;, &quot;diff.methyl.max&quot;, &quot;FDR&quot;)]
 methyl.df &lt;- methyl.df[complete.cases(methyl.df) &amp; !is.infinite(methyl.df$diff.methyl.max), ]
+
+# Bin data for boxplots
+methyl.df$diff.methyl.max.bin &lt;- cut(methyl.df$diff.methyl.max, seq(-1, 1, 0.25))
+
+f32 &lt;- ggplot(methyl.df[complete.cases(methyl.df), ], aes(diff.methyl.max.bin, logFC)) +
+    geom_violin(aes(diff.methyl.max.bin, logFC), fill = &quot;firebrick&quot;, trim = TRUE, scale = &quot;width&quot;) + 
+    geom_hline(yintercept = 0) + theme_bw() + ggtitle(&quot;Differential loops stratified by differential methylation&quot;) + 
+    xlab(&quot;Max change in anchor methylation&quot;) + ylab(&quot;log FC Loops&quot;)
+
+
 summary(lm(data = big.meth.summary, logFC ~ diff.methyl.max))</code></pre>
 <pre><code>## 
 ## Call:
@@ -362,16 +376,7 @@ summary(lm(data = big.meth.summary, logFC ~ diff.methyl.max))</code></pre>
 ##   (600 observations deleted due to missingness)
 ## Multiple R-squared:  0.1467, Adjusted R-squared:  0.1467 
 ## F-statistic:  1704 on 1 and 9907 DF,  p-value: &lt; 2.2e-16</code></pre>
-<pre class="r"><code># Bin data for boxplots
-methyl.df$diff.methyl.max.bin &lt;- cut(methyl.df$diff.methyl.max, seq(-1, 1, 0.25))
-
-f32 &lt;- ggplot(methyl.df[complete.cases(methyl.df), ], aes(diff.methyl.max.bin, logFC)) +
-    geom_violin(aes(diff.methyl.max.bin, logFC), fill = &quot;firebrick&quot;, trim = TRUE, scale = &quot;width&quot;) + 
-    geom_hline(yintercept = 0) + theme_bw() + ggtitle(&quot;Differential loops stratified by differential methylation&quot;) + 
-    xlab(&quot;Max change in anchor methylation&quot;) + ylab(&quot;log FC Loops&quot;)
-
-
-####### C -- Cohesin localizaiton
+<pre class="r"><code>####### C -- Cohesin localizaiton
 km_res &lt;- quickAssoc(qcLoops)
 km_res &lt;- annotateAnchors.bigwig(km_res, &quot;../data/bigwigs/K562-RAD21.bw&quot;)
 km_res &lt;- annotateAnchors.bigwig(km_res, &quot;../data/bigwigs/MCF7-RAD21.bw&quot;)
@@ -421,7 +426,7 @@ summary(lm(data = big.km.summary, logFC ~ diff.rad21.max))</code></pre>
 ##   (1469 observations deleted due to missingness)
 ## Multiple R-squared:  0.05704,    Adjusted R-squared:  0.05693 
 ## F-statistic: 546.7 on 1 and 9038 DF,  p-value: &lt; 2.2e-16</code></pre>
-<pre class="r"><code>##### D
+<pre class="r"><code>##### D -- K27ac signal
 km_res &lt;- quickAssoc(qcLoops)
 km_res &lt;- annotateAnchors.bigwig(km_res, &quot;../data/bigwigs/K562-H3K27ac.bw&quot;)
 km_res &lt;- annotateAnchors.bigwig(km_res, &quot;../data/bigwigs/MCF7-H3K27ac.bw&quot;)
@@ -600,7 +605,8 @@ p14 &lt;- loopPlot(km_anno, chr14reg)</code></pre>
 </div>
 <div id="citations" class="section level2">
 <h2>Citations</h2>
-<p><span class="math inline">\(^1\)</span>Hnisz, Denes, et al. “Activation of proto-oncogenes by disruption of chromosome neighborhoods.” Science (2016). <br><br> <span class="math inline">\(^2\)</span>Ji, Xiong, et al. “3D Chromosome Regulatory Landscape of Human Pluripotent Cells.” Cell stem cell (2015).<br><br> <span class="math inline">\(^3\)</span>Phanstiel, D, et al. “Mango: A bias correcting ChIA-PET analysis pipeline.” Bioinformatics (2015). <br><br> <span class="math inline">\(^4\)</span>Robinson, M, et al. “edgeR: a Bioconductor package for differential expression analysis of digital gene expression data.” Bioinformatics (2010). <br><br> <span class="math inline">\(^5\)</span>Law, C, et al. “Voom: precision weights unlock linear model analysis tools for RNA-seq read counts.” Genome Biology (2014).</p>
+<p><strong>In no particular order</strong>, here are some useful papers–</p>
+<p><span class="math inline">\(^1\)</span>Hnisz, Denes, et al. “Activation of proto-oncogenes by disruption of chromosome neighborhoods.” Science (2016). <br><br> <span class="math inline">\(^2\)</span>Ji, Xiong, et al. “3D Chromosome Regulatory Landscape of Human Pluripotent Cells.” Cell stem cell (2015).<br><br> <span class="math inline">\(^3\)</span>Phanstiel, D, et al. “Mango: A bias correcting ChIA-PET analysis pipeline.” Bioinformatics (2015). <br><br> <span class="math inline">\(^4\)</span>Robinson, M, et al. “edgeR: a Bioconductor package for differential expression analysis of digital gene expression data.” Bioinformatics (2010). <br><br> <span class="math inline">\(^5\)</span>Law, C, et al. “Voom: precision weights unlock linear model analysis tools for RNA-seq read counts.” Genome Biology (2014). <br> <br></p>
 </div>
 </div>
 

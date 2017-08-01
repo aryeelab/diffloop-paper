@@ -74,7 +74,9 @@ For this vignette, we use the `.mango` output files.
 
 ## Difference between mango and diffloop
 
+Most software for chromatin confirmation capture data like `mango` and `juicer` are focused on identifying whether or not a loop is real in a single sample form sequencing data. "Real" here simply means that the observed contact frequency from sequencing depth is greater than one would expect by chance. "Chance" here typically means that given some distance between two points and the total depth at two points, a reasonable background can be considered for how many paired-end reads we'd expect by chance. 
 
+In contrast, `diffloop` essentially assumes that one has settled on whether a loop is real or not (though `diffloop` does provide quality control measures to facilitate the interfence of this quality control) and provides functionality to understand what role these loops may play coordinating epigenetic and transcriptomic states and whether there is significant variance in the reads supporting loops in different conditions. To this end, these software packages meet very different needs. As the vignette unfolds, we hope to communicate the syngery between these tools. 
 
 ## Packages
 
@@ -133,6 +135,8 @@ qcLoops <- filterLoops(mangoSig, width = 5000, nreplicates = 2, nsamples = 2)
 
 ## Differential loop calling
 
+For computing differential loops, `diffloop` offers a few different functions for performing statistical testing. Most simply, if the `groups` associated with the samples are correctly specified, one can simply use the `quickAssoc` or `quickAssocVoom` function to run either a negative-binomial regression or a t-test with precious weights as these have previously been implemented in other tools. For greater specificity, the `loopsAssoc()` function provides more user interaction and specification for association. In a simple 2 x 2 test association, either of the `quickAssoc` functions should work well. For all differential testing in the remainder of the vignette, we use the `quickAssoc()` function as needed to compute differential loops. We've also performed a more detailed analysis of different modifications to the basic loop association contained in the .pdf on the previous page. However, as their are relatively few datasets with DNA loops, users are advised to carefully consider modifications to their system as these have not been extensively tested in a variety of settings. 
+
 ## Modified FDR Calculations
 
 Though the following section hasn't been fully examined, note that the differential loop calling may be biased depending on whether the loops are long/short or perhaps a function of another covariate. To this end, we recommend using the [IHW package](http://bioconductor.org/packages/release/bioc/html/IHW.html) for computing modified false-discovery rates. Given a `loops()` object named `assoc` with a similar 2x2 design, one can run `IHW` and incorporate the results into the `loops` object using a workflow like so--
@@ -168,6 +172,8 @@ In this section, we walk through an overview of how to incorporate additional fo
 
 Critical functionality in downstream `diffloop` analyses requires the annotation of loops. In particular, we annotate loops based on their assumed transcriptional activity by annotating the loops object with regions of promoters and enhancers. Here, we import enhancers defined by H3K27ac peaks in either cancer sample and use the RefSeq hg19 annotation transcription start sites padded by 1kb as the promoter regions.
 
+At the bottom of this code chunk, a four panel figure showing loops plotted against variable epigenetic marks is rendered and the code below provides four slightly redudant lines of executables to produce this figure. For each, a simple linear regression is fit between the log2 fold change of DNA looping data and epigenetic data between the two conditions, which signifies the break in the analysis of that particular data type. Variations of the `annotateAnchors` function provides the ability to import these epigenetic markings and facilitates their analysis with the loops() object. 
+
 ```{r annotate, warning = FALSE, message = FALSE, eval = TRUE}
 kh3 <- "../data/annotation/K562_H3K27ac.bed"
 mh3 <- "../data/annotation/MCF7_H3K27ac.bed"
@@ -177,7 +183,7 @@ h3k27ac.m <- rmchr(padGRanges(bedToGRanges(mh3), pad = 1000))
 
 enhancer <- union(h3k27ac.m, h3k27ac.k)
 promoter <- padGRanges(getHumanTSS(), pad = 1000)
-km_anno <- annotateLoops(qcLoops, enhancer = enhancer, promoter = promoter)
+km_anno <- annotateLoops(quickAssoc(qcLoops), enhancer = enhancer, promoter = promoter)
 ```
 
 ### Epigenetic correlates
@@ -247,7 +253,6 @@ diff.methyl.max <- as.matrix((sapply(1:length(idx), function(i) {
 big.meth.summary$diff.methyl.max <- as.numeric(diff.methyl.max)
 methyl.df <- big.meth.summary[, c("logFC", "diff.methyl.max", "FDR")]
 methyl.df <- methyl.df[complete.cases(methyl.df) & !is.infinite(methyl.df$diff.methyl.max), ]
-summary(lm(data = big.meth.summary, logFC ~ diff.methyl.max))
 
 # Bin data for boxplots
 methyl.df$diff.methyl.max.bin <- cut(methyl.df$diff.methyl.max, seq(-1, 1, 0.25))
@@ -256,6 +261,9 @@ f32 <- ggplot(methyl.df[complete.cases(methyl.df), ], aes(diff.methyl.max.bin, l
     geom_violin(aes(diff.methyl.max.bin, logFC), fill = "firebrick", trim = TRUE, scale = "width") + 
     geom_hline(yintercept = 0) + theme_bw() + ggtitle("Differential loops stratified by differential methylation") + 
     xlab("Max change in anchor methylation") + ylab("log FC Loops")
+
+
+summary(lm(data = big.meth.summary, logFC ~ diff.methyl.max))
 
 
 ####### C -- Cohesin localizaiton
@@ -290,7 +298,7 @@ f33 <- ggplot(big.km.summary[complete.cases(big.km.summary), ], aes(diff.max.bin
     xlab("Max change in anchor log FC RAD21 localization") + ylab("log FC Loops") 
 summary(lm(data = big.km.summary, logFC ~ diff.rad21.max))
 
-##### D
+##### D -- K27ac signal
 km_res <- quickAssoc(qcLoops)
 km_res <- annotateAnchors.bigwig(km_res, "../data/bigwigs/K562-H3K27ac.bw")
 km_res <- annotateAnchors.bigwig(km_res, "../data/bigwigs/MCF7-H3K27ac.bw")
