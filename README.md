@@ -6,6 +6,8 @@ Online resources and supplemental information
 ### Authors
 [Caleb Lareau](mailto:caleblareau@g.harvard.edu) and [Martin Aryee](https://aryee.mgh.harvard.edu/)
 
+![](figures/Figure1.png)
+
 ### Links
 - [Code repository](https://github.com/aryeelab/diffloop-paper) hosted on GitHub. 
 - [Detailed HTML Vignette](vignette/diffloop_vignette.html), which contains a reproducible walk-through the core functionality of `diffloop`. Cloning and analyzing the data in the repository linked above enables users to similarly follow the analysis structure of the vignette. 

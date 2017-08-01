@@ -14,6 +14,8 @@ vignette: >
 # Overview
 The purpose of this document is to describe in greater detail much of the useful functionality implemented in `diffloop`, an `R/Bioconductor` package. As the name suggests, the goal of this package was to create a computational framework to identify differential loops between conditions akin to differential gene expression analyses from RNA-Seq and related transcriptomics data. However, much of the more useful methodology is incorporated *before* one runs differential association (_i.e._ quality control) and after differential loops are called (_e.g._ visualization, correlating differential loops with epigenomic signal and gene expression, etc.). This extended online resource provides a means for understanding these function
 
+![](../figures/Figure1.png)
+
 Additional steps regarding the quality control ana analysis of similar ENCODE ChIA-PET data can be found [here](https://rpubs.com/caleblareau/diffloop_vignette). 
 
 
