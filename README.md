@@ -8,7 +8,7 @@ Online resources and supplemental information
 
 ### Links
 - [Code repository](https://github.com/aryeelab/diffloop-paper)
-- [Detailed HTML Vignette](vignette/diffloop_vignette.html), which 
+- [Detailed HTML Vignette](vignette/diffloop_vignette.html), which contains a reproducible walk-through the core functionality of `diffloop`. Cloning and analyzing the data in the repository linked above enables users to similarly follow the analysis structure of the vignette. 
 - [Writeup comparing variable](vignette/models_sizeFactors/writeup.pdf) contains a `.pdf` writeup
 of assessing differential looping associations under different model specifications. In particular,
 we assess specifying negative binomial regression models compared to using limma/voom as well
