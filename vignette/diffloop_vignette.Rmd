@@ -387,7 +387,8 @@ The plot clearly shows a trend where increasing the logFC of the loops results i
 
 ## Loops + epigenetic + transcription data
 
-Starting with our quality-control loops object, we can use functionality discussed above to view epigenetic correlations with gene expression values as mediated by loops. 
+Starting with our quality-control loops object, we can use functionality discussed above to view epigenetic correlations with gene expression values as mediated by loops. using functions above, we can link all three of these data types together in an effort to better characterize gene regulation at distal elements. Here's an example workflow for end-to-end analysis--
+
 
 ```{r trinity, warning = FALSE, message = FALSE, cache = TRUE, fig.height = 10, fig.width = 10}
 km_full <- qcLoops
@@ -481,6 +482,10 @@ fD <- qplot(df$proximal_methyl, df$log2FoldChange) + theme_bw() +
 
 plot_grid(fA, fB, fC, fD, ncol = 2, labels = c('A', 'B', 'C', 'D'), label_size = 20)
 ```
+**Figure above:** All loops are plotted that span 1577 unique genes. Red indicates loop bridging the gene and epigenetic locus is differential. All gene/loops are plotted that are annotated as enhancer-promoter. 
+
+Some interesting trends emerge. In particular, there appears to be a non-linear effect partircularly at the promoter K27ac promoter. As the distal enhancer provides a better correlation, we suggest that the non-linear effect is a function of the distal enhancer instead of the promoter. While the red points are scattered over the plot, we note that there are more than 1,500 points on the plot, so the center part is quiet dense. In this context, differential loops (red) are actually more likely to occur at the edges of the plot. 
+
 
 ## Visualization of loops
 We can visualize regions of differential topology using the loopPlot function. Below are two examples of significantly altered topology between the K562 and MCF7 samples.
