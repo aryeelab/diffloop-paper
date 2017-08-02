@@ -104,7 +104,7 @@ Finally, we filter loops using the `filterLoops()` function to ensure that loops
 
 The code chunk below shows the basic workflow for importing data and performing the quality control metrics discussed above, including the `dim()` of the loops objects at each filerting step so that one can readily see how loops and anchors get filtered out during this process--
 
-```{r importQC, cache = FALSE, message=FALSE, warning = FALSE}
+```{r importQC, cache = FALSE, message=FALSE, warning = FALSE, cache = TRUE}
 full <- loopsMake.mango("../data/raw_mango")
 dim(full)
 full <- updateLDGroups(full, c("K562", "K562", "MCF7", "MCF7"))
@@ -192,7 +192,7 @@ km_anno <- annotateLoops(quickAssoc(qcLoops), enhancer = enhancer, promoter = pr
 library(reshape2)
 library(cowplot)
 
-######## B -- Chromatin 
+######## A -- Chromatin accessibility
 km_res <- quickAssoc(qcLoops)
 km_res <- annotateAnchors.bigwig(km_res, "../data/bigwigs/K562-DNase.bw")
 km_res <- annotateAnchors.bigwig(km_res, "../data/bigwigs/MCF7-DNase.bw")
@@ -338,7 +338,7 @@ plot_grid(f31, f32, f33, f34, ncol = 2, labels = c('A', 'B', 'C', 'D'), label_si
 
 A core component of understanding the putative function of differential loops is the effect on transcription. Depending on the analysis that is desired, this can be quite tricky to integrate two very different data sets. However, we've provided some basic functionality for linking differential gene expression results from `DESeq2` to enhancer-promoter loops, detailed below. First, consider a rather straightforward analysis framework for performing differential gene expression analyses using `DESeq2`--
 
-```{r deseq, warning = FALSE, message = FALSE}
+```{r deseq, warning = FALSE, message = FALSE, cache = TRUE}
 library(DESeq2)
 
 files <- grep("counts", list.files("../data/rna-seq/"), value = TRUE)
@@ -357,7 +357,7 @@ resDESeq2 <- res[order(res$pvalue), ]
 
 With the `DESeq2` data in a table, we can annotate enhancer-promoter loops with their corresponding gene expression values. To achieve this, sequential execution of the `keepEPloops()` and `annotateLoops.dge()` functions are required. This will add data in the rowData slot that has the transcriptional information associated with the particular loop when `multiple = FALSE`, as we show below.
 
-```
+```{r EPloops, warning = FALSE, message = FALSE}
 km_res.ep <- keepEPloops(km_anno, enhancer, promoter)
 km.linked <- annotateLoops.dge(km_res.ep, resDESeq2, multiple = FALSE)
 ```
@@ -366,7 +366,7 @@ If `multiple = TRUE`, then loops that bridge multiple promoters will be annotate
 
 In this code chunk, we also set up a data frame for plotting global trends, including the methylation values at distal regions and promoter regions.
 
-```
+```{r binsExprs, warning = FALSE, message = FALSE}
 df <- summary(km.linked)
 df$logFC_bin <- cut(df$logFC, seq(-12, 12, 3))
 df$log2FoldChange_bin <- cut(df$log2FoldChange, seq(-20, 20, 5))
@@ -374,7 +374,7 @@ df$log2FoldChange_bin <- cut(df$log2FoldChange, seq(-20, 20, 5))
 
 We use our large data frame to visualize the relationship between increasing strength of enhancer-promoter loops and the increasing relative expression of transcripts that are linked to the loops.
 
-```
+```{r violinPlotExpression, warning = FALSE, message = FALSE, fig.width = 10}
 loopViolin <- ggplot(df[complete.cases(df) & df$padj < 0.1, ], aes(logFC_bin, log2FoldChange)) + 
     geom_violin(aes(logFC_bin, log2FoldChange), fill = "dodgerblue", trim = TRUE, scale = "width") + 
     geom_hline(yintercept = 0) +  theme_bw() + 
@@ -385,7 +385,104 @@ loopViolin
 
 The plot clearly shows a trend where increasing the logFC of the loops results in a corresponding logFC increase in the corresponding transcript that is the target of the enhancer-promoter loop. While there may be some degree of non-linearity in this plot, we suggest that analyzing more closely-related phenotypes may yield better insights into the role of differential loops on specific gene expression programs. 
 
-## Visualization
+## Loops + epigenetic + transcription data
+
+Starting with our quality-control loops object, we can use functionality discussed above to view epigenetic correlations with gene expression values as mediated by loops. 
+
+```{r trinity, warning = FALSE, message = FALSE, cache = TRUE, fig.height = 10, fig.width = 10}
+km_full <- qcLoops
+h3k27ac.k <- rmchr(padGRanges(bedToGRanges("../data/annotation/K562_H3K27ac.bed"), pad = 1000))
+h3k27ac.m <- rmchr(padGRanges(bedToGRanges("../data/annotation/MCF7_H3K27ac.bed"), pad = 1000))
+enhancer <- union(h3k27ac.m, h3k27ac.k)
+promoter <- padGRanges(getHumanTSS(), pad = 1000)
+
+km_full_anno <- annotateLoops(km_full, enhancer = enhancer, promoter = promoter)
+sum(km_full_anno@rowData$loop.type == "e-p")
+
+km_res <- quickAssoc(km_full)
+km_res.ep <- keepEPloops(km_res, enhancer, promoter)
+km_res.ep <- annotateAnchors.bigwig(km_res.ep, "../data/bigwigs/K562-H3K27ac.bw")
+km_res.ep <- annotateAnchors.bigwig(km_res.ep, "../data/bigwigs/MCF7-H3K27ac.bw")
+km_res.ep <- annotateAnchors.bed(km_res.ep, "../data/450k-methyl/K562-450k.bedgraph")
+km_res.ep <- annotateAnchors.bed(km_res.ep, "../data/450k-methyl/MCF7-450k.bedgraph")
+
+mcols(km_res.ep@anchors) <- cbind(log2(mcols(km_res.ep@anchors)$MCF7.H3K27ac/mcols(km_res.ep@anchors)$K562.H3K27ac), 
+    mcols(km_res.ep@anchors)$MCF7.450k - mcols(km_res.ep@anchors)$K562.450k)
+
+km.linked <- annotateLoops.dge(km_res.ep, res, multiple = FALSE)
+dim(km.linked)
+length(unique(km.linked@rowData$gene.tss))
+
+df <- summary(km.linked)
+df$logFC_bin <- cut(df$logFC, seq(-9, 9, 3))
+df$logFC_bin2 <- cut(df$logFC, seq(-9, 9, 3))
+
+df$log2FoldChange_bin <- cut(df$log2FoldChange, seq(-20, 20, 5))
+
+distal_enhancer <- rep(0, dim(df)[1])
+distal_methyl <- rep(0, dim(df)[1])
+distal_enhancer[df$anchor.tss == 1] <- df$V1_2[df$anchor.tss == 1]
+distal_enhancer[df$anchor.tss == 2] <- df$V1_1[df$anchor.tss == 2]
+df$distal_enhancer <- distal_enhancer
+
+distal_methyl[df$anchor.tss == 1] <- df$V2_2[df$anchor.tss == 1]
+distal_methyl[df$anchor.tss == 2] <- df$V2_1[df$anchor.tss == 2]
+df$distal_methyl <- distal_methyl
+
+proximal_enhancer <- rep(0, dim(df)[1])
+proximal_enhancer[df$anchor.tss == 1] <- df$V1_1[df$anchor.tss == 1]
+proximal_enhancer[df$anchor.tss == 2] <- df$V1_2[df$anchor.tss == 2]
+df$proximal_enhancer <- proximal_enhancer
+
+proximal_methyl <- rep(0, dim(df)[1])
+proximal_methyl[df$anchor.tss == 1] <- df$V2_1[df$anchor.tss == 1]
+proximal_methyl[df$anchor.tss == 2] <- df$V2_2[df$anchor.tss == 2]
+df$proximal_methyl <- proximal_methyl
+
+df$Differential_Loop <- df$FDR < 0.01
+
+df.ssig <- df[df$padj < 0.01 & df$FDR < 0.01, ]
+```
+
+From this workflow, we see how many enhancer-promoter loops were contained in the `loops()` object before synthesizing a single data frame that can visualize epigenetic correlates of transcription mediated by loops. We'll also show the extent that the epigenetic marking correlates with expression. 
+
+```{r trinityPlot, warning = FALSE, message = FALSE, cache = TRUE, fig.height = 10, fig.width = 10}
+cor(df$distal_enhancer, df$log2FoldChange, use ="pairwise.complete.obs")
+fA <- qplot(df$distal_enhancer, df$log2FoldChange) + theme_bw() +
+  labs(title = "Differential Expression by enhancer H3K27ac", 
+    x = "log FC H3K27ac at enhancer anchor", y = "log FC of Transcript Expression") +
+  geom_point(aes(colour = df$Differential_Loop)) +
+     scale_colour_manual(name="",  values =c("dimgray", "red")) +
+  theme(legend.position="none") + geom_smooth(method = "lm", se = FALSE, color = "black")
+
+cor(df$proximal_enhancer, df$log2FoldChange, use ="pairwise.complete.obs")
+fB <- qplot(df$proximal_enhancer, df$log2FoldChange) + theme_bw() +
+  labs(title = "Differential Expression by promoter H3K27ac", 
+    x = "log FC H3K27ac at promoter anchor", y = "log FC of Transcript Expression") +
+  geom_point(aes(colour = df$Differential_Loop)) +
+    scale_colour_manual(name="",  values =c("dimgray", "red")) + 
+  theme(legend.position="none") + geom_smooth(method = "lm", se = FALSE, color = "black")
+
+cor(df$distal_methyl, df$log2FoldChange, use ="pairwise.complete.obs")
+fC <- qplot(df$distal_methyl, df$log2FoldChange) + theme_bw() +
+  labs(title = "Differential Expression by enhancer DNA Methylation", 
+    x = "Change in DNA methylation at enhancer anchor", y = "log FC of Transcript Expression") +
+  geom_point(aes(colour = df$Differential_Loop)) +
+    scale_colour_manual(name="",  values =c("dimgray", "red"))+
+  theme(legend.position="none") + geom_smooth(method = "lm", se = FALSE, color = "black")
+
+cor(df$proximal_methyl, df$log2FoldChange, use ="pairwise.complete.obs")
+fD <- qplot(df$proximal_methyl, df$log2FoldChange) + theme_bw() +
+  labs(title = "Differential Expression by promoter DNA Methylation", 
+    x = "Change in DNA methylation at promoter anchor", y = "log FC of Transcript Expression") +
+  geom_point(aes(colour = df$Differential_Loop)) +
+    scale_colour_manual(name="",  values =c("dimgray", "red")) +
+  theme(legend.position="none")+ geom_smooth(method = "lm", se = FALSE, color = "black")
+
+plot_grid(fA, fB, fC, fD, ncol = 2, labels = c('A', 'B', 'C', 'D'), label_size = 20)
+```
+
+## Visualization of loops
 We can visualize regions of differential topology using the loopPlot function. Below are two examples of significantly altered topology between the K562 and MCF7 samples.
 
 ```{r p1, fig.height=7}
