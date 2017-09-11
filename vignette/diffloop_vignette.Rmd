@@ -40,6 +40,10 @@ df <- summary(dat)
 
 In the code above, the idea is to add a column to the `rowData` slot that is the difference in counts per loop between sample 2 and sample 1, which may be informative for finding differential loops between the two samples. the `summary` command in `diffloop` (when applied to a `loops()` object) results in a `data.frame` of useful information per loop where users can now sort `df` by the `diffCount` column much like any other `data.frame` in R. Again, while single replicate conditions are certainly sub-optimal, we suggest this framework for a simple first pass in this setting. 
 
+## On sample normalization and GC Bias
+
+The extent to which GC-bias and other confounding variables bias differential loop calls has not yet been explored in hierarchical chromatin interation data. As models for correcting GC-bias are still evolving for more widely used assays such as RNA-seq and relatively few chromatin looping datasets exist, it is challenging presently to posit a generalized effect of these biases on differential loop calls. While various model-based approaches have been suggested for Hi-C data, analogs for ChIP-based looping assays have not been well established. We note that `diffloop` currently corrects only for variable library size. However, we anticipate expanding the functionality of the package as these methods for bias correction and looping data become more available.  
+
 ## Sample analysis of ENCODE ChIA-PET data / preprocessing
 
 For the remaining contents of this document, we primarily discuss the analysis framework associated with a sample comparison of differential looping between the MCF7 and K562 cancer cell lines. ChIA-PET data made available through the ENCODE project were analyzed using the following workflow--
